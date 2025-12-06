@@ -1,0 +1,2913 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Silhouette Diagnostic Consultants</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app"></div>
+
+    <script>
+        // ====== APPLICATION STATE & MOCK DATA ======
+        const appState = {
+            currentUser: null,
+            currentView: 'login',
+            billingStep: 1,
+            sidebarCollapsed: false,
+            showAddPRForm: false, // State for PR form visibility
+            showAddInventoryForm: false, // State for Inventory form visibility
+            showAddStaffForm: false, // State for Staff form visibility
+            editingPRId: null, // To track which PR is being edited
+            viewingOrderId: null, // To track which order is being viewed in detail
+            editingInventoryId: null, // To track which inventory item is being edited
+            companyProfile: {
+                name: 'Silhouette Diagnostic Consultants',
+                address: '123 Health St, Wellness City, 10001',
+                email: 'contact@silhouettediagnostics.com',
+                contact: '+234-801-234-5678',
+                logo: '🏥' // Default logo/icon
+            },
+            theme: 'light', // light or dark
+            colorTheme: 'blue', // blue, skyblue, gray, brown, green, purple
+            billingData: {
+                patientName: '',
+                pid: '',
+                contact: '',
+                referredBy: '',
+                staffName: '', // Added staff name field
+                selectedServices: [],
+                // When VIP mode is enabled, selectedServices items may include an `overridePrice` field
+                discount: 0,
+                total: 0,
+                paymentMethod: 'cash',
+                amountPaid: 0, // For installment payments
+                balance: 0, // For installment payments
+                paymentStatus: 'full' // Added payment status field (full/installment)
+            },
+            vipMode: false,
+            recordFilters: { // Added record filter state
+                date: '',
+                month: '',
+                year: '',
+                time: '',
+                filterType: 'all',
+                searchQuery: '' // For patient name/PID search
+            }
+        };
+
+        // VIP form mode to allow manual price overrides for selected services
+        // NOTE: stored on appState so render() can pick it up
+        // (we'll use `appState.vipMode` elsewhere)
+        // add below to keep object shape consistent
+        // (this will be moved into the main object in the next patch if needed)
+
+        // Users - Initially empty; to be managed by admin in production
+        let users = [];
+
+        // Mock Data - PR List (Original Contacts)
+        let prList = [
+            { id: 1, name: 'Dr Abdulraheem Arewa', phone: '0906 499 8324' },
+            { id: 2, name: 'Dr Abdulraheem Wdh', phone: '0807 573 2276' },
+            { id: 3, name: 'Dr Abdulsalem Wdh', phone: '0806 895 4927' },
+            { id: 4, name: 'Dr Abduseli Fmc', phone: '0903 324 0160' },
+            { id: 5, name: 'Dr Abegunde Babatunde', phone: '0703 800 9824' },
+            { id: 6, name: 'Dr Abel (Daughter Of Charity)', phone: '0909 511 0075' },
+            { id: 7, name: 'Dr Abiodun ( Chem Health)', phone: '0907 188 3711' },
+            { id: 8, name: 'Dr Abioye Ferepod', phone: '0815 272 3205' },
+            { id: 9, name: 'Dr Abubakar', phone: '0809 966 5102' },
+            { id: 10, name: 'Dr Abubakar (Mbph)', phone: '0706 834 6935' },
+            { id: 11, name: 'Dr Abubakar Fmc', phone: '0812 933 3737' },
+            { id: 12, name: 'Dr Abubakar H GGH', phone: '0809 444 9487' },
+            { id: 13, name: 'Dr Abubakar Mdh', phone: '0817 574 4430' },
+            { id: 14, name: 'Dr Abubakar Wdh', phone: '0806 003 4307' },
+            { id: 15, name: 'Dr Adamu GGH', phone: '+234 903 400 3357' },
+            { id: 16, name: 'Dr Adamu (A&E) Mdh', phone: '0806 820 9054' },
+            { id: 17, name: 'Dr Adaobi FMC', phone: '0814 756 6233' },
+            { id: 18, name: 'Dr Adedeji Cardiologist', phone: '+234 803 760 1383' },
+            { id: 19, name: 'Dr Adejumo Wdh', phone: '0803 723 3550' },
+            { id: 20, name: 'Dr Ademola Fmc', phone: '0803 451 9091' },
+            { id: 21, name: 'Dr Adeola (FMC)', phone: '0806 453 7707' },
+            { id: 22, name: 'Dr AHMED Angelic Care', phone: '+234 703 074 6003' },
+            { id: 23, name: 'Dr Ainakhu Mdh', phone: '0818 776 8921' },
+            { id: 24, name: 'Dr Ainedo', phone: '0809 156 0055' },
+            { id: 25, name: 'Dr Aire (La Vida Hospital)', phone: '0805 257 3345' },
+            { id: 26, name: 'Dr Aisha ( Custom)', phone: '0808 793 2063' },
+            { id: 27, name: 'Dr Aisha Abdulkadir Mdh Sopd', phone: '0708 455 3122' },
+            { id: 28, name: 'Dr Aisha Aminu mdh', phone: '0903 580 1170' },
+            { id: 29, name: 'Dr Aisha Diwko Internal Medicine FMC', phone: '0803 595 6257' },
+            { id: 30, name: 'Dr Aisha FMC', phone: '0803 866 4816' },
+            { id: 31, name: 'Dr Aisha Mdh', phone: '0803 466 2980' },
+            { id: 32, name: 'Dr Aisha Mu\'azu Fmc', phone: '0806 692 7182' },
+            { id: 33, name: 'Dr Aisha Samiwadata', phone: '0808 507 3144' },
+            { id: 34, name: 'Dr Aisha Mari (Mdh)', phone: '0816 035 4691' },
+            { id: 35, name: 'Dr Aisha. H Mdh', phone: '0806 580 9497' },
+            { id: 36, name: 'Dr Ajibola (A&E)', phone: '0803 845 2296' },
+            { id: 37, name: 'Dr Ajibola (Mdh)', phone: '0803 845 2296' },
+            { id: 38, name: 'Dr Akila Mdh', phone: '0806 200 6013' },
+            { id: 39, name: 'Dr Akuma MDH A&E', phone: '+234 811 201 8458' },
+            { id: 40, name: 'Dr Aliu', phone: '0803 045 9295' },
+            { id: 41, name: 'Dr Aliyu (Mdh)', phone: '0803 821 7000' },
+            { id: 42, name: 'Dr Amarachi( Federal Road Safety)', phone: '0803 478 6238' },
+            { id: 43, name: 'Dr Amina ( Kano)', phone: '0816 983 0844' },
+            { id: 44, name: 'Dr Amina (MDH)', phone: '+234 814 160 6236' },
+            { id: 45, name: 'Dr Amina Bello (Mdh)', phone: '0909 817 5000' },
+            { id: 46, name: 'Dr Amina Isah Wdh', phone: '0905 664 0075' },
+            { id: 47, name: 'Dr Amina Stephen ( Zankli)', phone: '0813 165 2676' },
+            { id: 48, name: 'Dr Amina Zankli', phone: '0813 165 2676' },
+            { id: 49, name: 'Dr Aminu Mohammed', phone: '0803 649 1499' },
+            { id: 50, name: 'Dr Amira Alliance', phone: '0905 446 5967' },
+            { id: 51, name: 'Dr Anachebe (Gopd) Fmc', phone: '0803 744 2779' },
+            { id: 52, name: 'Dr Anachebe Amara Mdh', phone: '0803 347 1430' },
+            { id: 53, name: 'Dr Andrew Mdh', phone: '0813 061 9363' },
+            { id: 54, name: 'Dr Andrew Wdh', phone: '0803 831 6688' },
+            { id: 55, name: 'Dr Ansa Wdh', phone: '0903 467 4330' },
+            { id: 56, name: 'Dr Anyaike Mdh', phone: '0803 346 6806' },
+            { id: 57, name: 'Dr Ashe.A Mdh', phone: '0806 003 4307' },
+            { id: 58, name: 'Dr Asmau', phone: '0803 050 9700' },
+            { id: 59, name: 'Dr Asmau Fmc', phone: '0805 777 4444' },
+            { id: 60, name: 'Dr Asmau Sdc', phone: '0806 910 9494' },
+            { id: 61, name: 'Dr Asst Manager. Goodness', phone: '0701 565 4444' },
+            { id: 62, name: 'Dr Audu', phone: '0806 600 4480' },
+            { id: 63, name: 'Dr Ayeni (Ushafa)', phone: '0806 088 8899' },
+            { id: 64, name: 'Dr Azeezat Fmc', phone: '0818 013 0081' },
+            { id: 65, name: 'Dr B. C Udo (Joyland Med Center)', phone: '0803 623 3929' },
+            { id: 66, name: 'Dr Badijo GGH', phone: '0707 284 9596' },
+            { id: 67, name: 'Dr Bajowa NH', phone: '0705 118 8389' },
+            { id: 68, name: 'Dr Bakari GGH', phone: '0806 352 9563' },
+            { id: 69, name: 'Dr Bako Mdh', phone: '0818 830 7314' },
+            { id: 70, name: 'Dr Bala FMC', phone: '0803 431 8388' },
+            { id: 71, name: 'Dr Bala Laila Adh', phone: '0803 208 2208' },
+            { id: 72, name: 'Dr Balogun Wdh', phone: '0809 142 8700' },
+            { id: 73, name: 'Dr Barachel FMC', phone: '0816 728 0310' },
+            { id: 74, name: 'Dr Barry Fmc Keffi', phone: '0703 114 0682' },
+            { id: 75, name: 'Dr Barsisa Police Hospital', phone: '0807 816 9845' },
+            { id: 76, name: 'Dr Bashir Wdh', phone: '0803 768 6616' },
+            { id: 77, name: 'Dr Basi ( Fmc)', phone: '0703 892 7393' },
+            { id: 78, name: 'Dr Bassey NH', phone: '0803 677 7585' },
+            { id: 79, name: 'Dr Bello B (Gwarimpa)', phone: '0806 580 5543' },
+            { id: 80, name: 'Dr Bello Nisa', phone: '0803 452 7954' },
+            { id: 81, name: 'Dr Binta', phone: '0818 200 4872' },
+            { id: 82, name: 'Dr Chinedu Mdh', phone: '0814 809 1467' },
+            { id: 83, name: 'Dr Chinenye (FMC)', phone: '0901 327 2341' },
+            { id: 84, name: 'Dr Chinomso FMC', phone: '0805 508 3305' },
+            { id: 85, name: 'Dr Chinwe (NH) ENT, Alliance', phone: '0806 134 0193' },
+            { id: 86, name: 'Dr Chinyere Wdh', phone: '0813 775 0464' },
+            { id: 87, name: 'Dr Chioma (Mopd) Asokoro', phone: '0818 284 8813' },
+            { id: 88, name: 'Dr Chioma amasike FMC', phone: '0803 646 4457' },
+            { id: 89, name: 'Dr Chioma Fertil Aid Clinic', phone: '0706 359 0667' },
+            { id: 90, name: 'Dr Chisom Wdh', phone: '0901 836 0060' },
+            { id: 91, name: 'Dr Chiwa Wdh', phone: '0815 520 6243' },
+            { id: 92, name: 'Dr Chomia Egimike Fmc', phone: '0803 604 0554' },
+            { id: 93, name: 'Dr Chris Ibe FMC', phone: '0907 145 9839' },
+            { id: 94, name: 'Dr Christabel Adh', phone: '0904 733 9060' },
+            { id: 95, name: 'Dr Clement', phone: '0703 400 3719' },
+            { id: 96, name: 'Dr David', phone: '0803 615 6060' },
+            { id: 97, name: 'Dr David (MDH)', phone: '0803 615 6060' },
+            { id: 98, name: 'Dr Dolapo (A&E) Mdh', phone: '0812 434 4235' },
+            { id: 99, name: 'Dr Donald', phone: '0809 546 5111' },
+            { id: 100, name: 'Dr Douglas ( Sopd) FMC', phone: '0812 461 1270' },
+            { id: 101, name: 'Dr Ebi', phone: '0703 880 2688' },
+            { id: 102, name: 'Dr Ebi 2', phone: '+252 61 0702357' },
+            { id: 103, name: 'Dr Eboigbe MDH', phone: '0814 573 2609' },
+            { id: 104, name: 'Dr Ebruke Fmc', phone: '0906 358 8892' },
+            { id: 105, name: 'Dr Ebube (WDH)', phone: '0803 780 2004' },
+            { id: 106, name: 'Dr Ebuka FMC', phone: '0805 801 0352' },
+            { id: 107, name: 'Dr Earnest Ekekweme Uath', phone: '0803 855 0077' },
+            { id: 108, name: 'Dr Ebenezer FMC', phone: '0803 593 2635' },
+            { id: 109, name: 'Dr Ebeniza', phone: '0703 929 7657' },
+            { id: 110, name: 'Dr Ebis Sister', phone: '0812 202 3987' },
+            { id: 111, name: 'Dr Egbe Wdh', phone: '0806 728 5062' },
+            { id: 112, name: 'Dr Enejo (FMC)', phone: '0803 490 2920' },
+            { id: 113, name: 'Dr Essan Wdh', phone: '0803 357 7479' },
+            { id: 114, name: 'Dr Essien U. (NH)', phone: '0806 785 4639' },
+            { id: 115, name: 'Dr Esther', phone: '0902 591 1424' },
+            { id: 116, name: 'Dr Esther ( St Mary\'s)', phone: '0814 127 2514' },
+            { id: 117, name: 'Dr Esther Mdh', phone: '0803 738 3199' },
+            { id: 118, name: 'Dr Evie Fmc', phone: '0803 065 6599' },
+            { id: 119, name: 'Dr Eze Mdh', phone: '0803 803 5133' },
+            { id: 120, name: 'Dr F.N Zankli', phone: '0803 707 9898' },
+            { id: 121, name: 'Dr Faith', phone: '0803 400 1373' },
+            { id: 122, name: 'Dr Faruk Mdh', phone: '0803 301 7064' },
+            { id: 123, name: 'Dr Fatima (Mdh)', phone: '0813 183 9109' },
+            { id: 124, name: 'Dr Fatima Mohammed', phone: '0810 551 2927' },
+            { id: 125, name: 'Dr Fatima Wdh', phone: '0803 617 8000' },
+            { id: 126, name: 'Dr Funmi (Fmc)', phone: '0803 400 0081' },
+            { id: 127, name: 'Dr Funmi Mdh', phone: '0803 325 5650' },
+            { id: 128, name: 'Dr Gabriel (Mdh)', phone: '0803 394 6500' },
+            { id: 129, name: 'Dr Gaya Sdc', phone: '0803 707 4307' },
+            { id: 130, name: 'Dr Gimba (Fmc)', phone: '0803 607 7077' },
+            { id: 131, name: 'Dr Godiya', phone: '0803 531 3330' },
+            { id: 132, name: 'Dr Goodness', phone: '0701 565 4444' },
+            { id: 133, name: 'Dr Hassan GGH', phone: '0803 073 6867' },
+            { id: 134, name: 'Dr Hauwa (Nh)', phone: '0803 306 9621' },
+            { id: 135, name: 'Dr Hauwa Wdh', phone: '0803 503 6296' },
+            { id: 136, name: 'Dr Henry Peter(Multi Ray)', phone: '0803 284 1483' },
+            { id: 137, name: 'Dr Henry Wdh', phone: '0803 322 2946' },
+            { id: 138, name: 'Dr Homa GGH', phone: '0903 248 9877' },
+            { id: 139, name: 'Dr Hussaina. M.kufuti', phone: '0906 143 6130' },
+            { id: 140, name: 'Dr Hyginus', phone: '0805 274 5328' },
+            { id: 141, name: 'Dr Ibe 2', phone: '0808 840 4286' },
+            { id: 142, name: 'Dr Ibiteye', phone: '0802 774 8642' },
+            { id: 143, name: 'Dr Ibraheem Mdh', phone: '0810 462 8580' },
+            { id: 144, name: 'Dr Ibrahim ( Police Hospital)', phone: '0810 564 2276' },
+            { id: 145, name: 'Dr Ibrahim Aisha Mdh', phone: '0803 529 9408' },
+            { id: 146, name: 'Dr Ibrahim Aramide Mdh', phone: '0803 437 5748' },
+            { id: 147, name: 'Dr Ibrahim B.A Wdh', phone: '0803 624 3804' },
+            { id: 148, name: 'Dr Ibrahim Fmc', phone: '0803 454 4496' },
+            { id: 149, name: 'Dr Ibrahim I. K. Mdh', phone: '0803 624 3804' },
+            { id: 150, name: 'Dr Idika. K. Mdh', phone: '0803 451 9897' },
+            { id: 151, name: 'Dr Idowu (Mdh)', phone: '0803 700 8782' },
+            { id: 152, name: 'Dr Idrisa Mdh', phone: '0803 668 5225' },
+            { id: 153, name: 'Dr Ifeanyi (Hoc)', phone: '0803 703 6176' },
+            { id: 154, name: 'Dr Ifeanyi Mdh', phone: '0813 103 0783' },
+            { id: 155, name: 'Dr Ifeanyi Onuoha Mdh', phone: '0803 474 8153' },
+            { id: 156, name: 'Dr Ifeanyi Wdh', phone: '0803 474 8153' },
+            { id: 157, name: 'Dr Ijeoma (Mdh)', phone: '0703 677 7566' },
+            { id: 158, name: 'Dr Ijere (Uath)', phone: '0803 701 9831' },
+            { id: 159, name: 'Dr Ijezie NH', phone: '0803 775 8899' },
+            { id: 160, name: 'Dr Ikwesi', phone: '0803 455 1297' },
+            { id: 161, name: 'Dr Imana Mdh', phone: '0803 540 8596' },
+            { id: 162, name: 'Dr Innocent (A&E) Mdh', phone: '0803 361 0262' },
+            { id: 163, name: 'Dr Innocent (Wdh)', phone: '0803 502 0270' },
+            { id: 164, name: 'Dr Israel (Faith Mediolex)', phone: '0915 736 7399' },
+            { id: 165, name: 'Dr Israel GGH', phone: '0806 003 0939' },
+            { id: 166, name: 'Dr Israel Mdh', phone: '0903 459 1260' },
+            { id: 167, name: 'Dr Istifanus Defense', phone: '0703 639 0017' },
+            { id: 168, name: 'Dr Isu-igwu Mdh', phone: '2348030613057' },
+            { id: 169, name: 'Dr Isyaka Ibrahim (Wdh)', phone: '0911 427 9611' },
+            { id: 170, name: 'Dr Isyaka Wdh', phone: '0707 096 8098' },
+            { id: 171, name: 'Dr Itepu (Faith Mediplex)', phone: '0813 121 4949' },
+            { id: 172, name: 'Dr Itoandon Fmc', phone: '0805 929 4481' },
+            { id: 173, name: 'Dr Itua Mdh', phone: '0810 466 8593' },
+            { id: 174, name: 'Dr IVie WDh', phone: '0814 808 1848' },
+            { id: 175, name: 'Dr Ivy Omaagabe (Adh)', phone: '0706 896 9318' },
+            { id: 176, name: 'Dr Jato Fmc', phone: '0813 284 3239' },
+            { id: 177, name: 'Dr Jeff Mdh', phone: '0803 923 6537' },
+            { id: 178, name: 'Dr Kachi( FMC)', phone: '0811 734 4287' },
+            { id: 179, name: 'Dr Kadija FMC ( Orthopedic', phone: '0808 313 3682' },
+            { id: 180, name: 'Dr Kadija Fmc Sopd', phone: '0706 997 4897' },
+            { id: 181, name: 'Dr Kadijah. S FMC', phone: '0806 758 9999' },
+            { id: 182, name: 'Dr Kadiya GGH', phone: '0805 450 7715' },
+            { id: 183, name: 'Dr Laja Mdh', phone: '0805 413 5440' },
+            { id: 184, name: 'Dr Lucky Edego Mdh', phone: '0803 331 4627' },
+            { id: 185, name: 'Dr Martha Mdh', phone: '0803 405 8431' },
+            { id: 186, name: 'Dr Mathew (Uath)', phone: '0803 928 2062' },
+            { id: 187, name: 'Dr Max Wdh', phone: '0803 460 3381' },
+            { id: 188, name: 'Dr Mike (Gwarimpa Hosp)', phone: '0806 000 7064' },
+            { id: 189, name: 'Dr Minji (General Hosp Gwarimpa)', phone: '0803 705 4811' },
+            { id: 190, name: 'Dr Momoh Razak. FMC', phone: '0703 465 6166' },
+            { id: 191, name: 'Dr Momoh Wdh Mdh', phone: '0916 405 5914' },
+            { id: 192, name: 'Dr Momudu', phone: '0807 106 5001' },
+            { id: 193, name: 'Dr Monica Alitor', phone: '0802 329 4984' },
+            { id: 194, name: 'Dr Morah Wdh', phone: '0803 068 6102' },
+            { id: 195, name: 'Dr Moses (Sure Link)', phone: '0703 429 8094' },
+            { id: 196, name: 'Dr Obinna Wdh', phone: '0803 193 8280' },
+            { id: 197, name: 'Dr Ojah ( Rapha Con)', phone: '0806 024 8584' },
+            { id: 198, name: 'Dr Ojah Regina', phone: '0802 080 6700' },
+            { id: 199, name: 'Dr Oje Adh', phone: '0705 418 5651' },
+            { id: 200, name: 'Dr Oje Cynthia MDH', phone: '0816 186 1151' },
+            { id: 201, name: 'Dr Ojo(Min Of Works)', phone: '0802 308 2873' },
+            { id: 202, name: 'Dr Okafor NH', phone: '0806 672 8042' },
+            { id: 203, name: 'Dr Okafor Spring Bloom', phone: '0803 450 0221' },
+            { id: 204, name: 'Dr Okang ( Zankli)', phone: '0806 435 5768' },
+            { id: 205, name: 'Dr Okeke (Nscdc)', phone: '0803 824 6644' },
+            { id: 206, name: 'Dr Okeme Emmanuel Lafia', phone: '0813 627 7345' },
+            { id: 207, name: 'Dr Okereke Mdh', phone: '0703 555 0241' },
+            { id: 208, name: 'Dr Okewu Cecilia Adh', phone: '0803 646 8613' },
+            { id: 209, name: 'Dr Okoro', phone: '0803 888 7709' },
+            { id: 210, name: 'Dr Okoro (NH)', phone: '0803 888 7709' },
+            { id: 211, name: 'Dr Olakunle (MDH)', phone: '0803 717 6400' },
+            { id: 212, name: 'Dr Oladipo (Mdh)', phone: '0803 586 1989' },
+            { id: 213, name: 'Dr Olaniyan (NH)', phone: '0703 056 9414' },
+            { id: 214, name: 'Dr Olufemi (Mdh)', phone: '0803 331 6356' },
+            { id: 215, name: 'Dr Oluromade( Asokoro)', phone: '0704 302 2669' },
+            { id: 216, name: 'Dr Olusegun Adeyemi Nisa', phone: '0706 545 1261' },
+            { id: 217, name: 'Dr Olusegun Stella MDH', phone: '0703 253 2877' },
+            { id: 218, name: 'Dr Olusegun Zankli CMD', phone: '0803 566 8422' },
+            { id: 219, name: 'Dr Omachi FMC', phone: '0903 693 5692' },
+            { id: 220, name: 'Dr Omego (ANC) Fmc', phone: '0812 923 7987' },
+            { id: 221, name: 'Dr Omotunde', phone: '0803 591 5862' },
+            { id: 222, name: 'Dr Omotunde Wdh', phone: '0803 591 5862' },
+            { id: 223, name: 'Dr Onuoha Mdh', phone: '0803 379 2378' },
+            { id: 224, name: 'Dr Oseni Mdh', phone: '0803 358 1282' },
+            { id: 225, name: 'Dr Osita Mdh', phone: '0803 746 4482' },
+            { id: 226, name: 'Dr Owolabi (NH)', phone: '0806 828 0080' },
+            { id: 227, name: 'Dr Paul (MDH)', phone: '0803 700 8448' },
+            { id: 228, name: 'Dr Paul (NH)', phone: '0703 514 8352' },
+            { id: 229, name: 'Dr Paulina (FMC)', phone: '0803 574 7793' },
+            { id: 230, name: 'Dr Pete (Mdh)', phone: '0803 355 2426' },
+            { id: 231, name: 'Dr Pete Keffi', phone: '0803 355 2426' },
+            { id: 232, name: 'Dr Peter', phone: '0803 400 1373' },
+            { id: 233, name: 'Dr Peter (Nisa)', phone: '0803 599 0760' },
+            { id: 234, name: 'Dr Peter GGH', phone: '0803 777 5013' },
+            { id: 235, name: 'Dr Peter NH', phone: '0803 400 1373' },
+            { id: 236, name: 'Dr Peter Uath', phone: '0803 903 5988' },
+            { id: 237, name: 'Dr Philemon Mdh', phone: '0803 704 6013' },
+            { id: 238, name: 'Dr Phillip (Mdh)', phone: '0803 787 5683' },
+            { id: 239, name: 'Dr Philip NH', phone: '0803 787 5683' },
+            { id: 240, name: 'Dr Pitan (Mdh)', phone: '0803 392 6404' },
+            { id: 241, name: 'Dr Polycarp (UATH)', phone: '0806 597 0212' },
+            { id: 242, name: 'Dr Prisca (MDH)', phone: '0803 703 9132' },
+            { id: 243, name: 'Dr Prisca Mdh', phone: '0803 703 9132' },
+            { id: 244, name: 'Dr Princess Mdh', phone: '0803 356 0004' },
+            { id: 245, name: 'Dr Queen', phone: '0803 400 1373' },
+            { id: 246, name: 'Dr R.M Jato', phone: '0803 646 0451' },
+            { id: 247, name: 'Dr R.M Jato Fmc', phone: '0803 646 0451' },
+            { id: 248, name: 'Dr Rabiu (Asokoro)', phone: '0703 040 1085' },
+            { id: 249, name: 'Dr Rakiya (FMC)', phone: '0803 599 3757' },
+            { id: 250, name: 'Dr Raliat', phone: '0803 351 0500' },
+            { id: 251, name: 'Dr Ransome Wdh', phone: '0803 381 0544' },
+            { id: 252, name: 'Dr Raph (Wdh)', phone: '0803 605 9180' },
+            { id: 253, name: 'Dr Raph Uath', phone: '0803 605 9180' },
+            { id: 254, name: 'Dr Rebecca (Mdh)', phone: '0803 590 4403' },
+            { id: 255, name: 'Dr Reuben Uath', phone: '0803 585 0008' },
+            { id: 256, name: 'Dr Richard (Mdh)', phone: '0803 349 2244' },
+            { id: 257, name: 'Dr Risikat', phone: '0806 828 0080' },
+            { id: 258, name: 'Dr Risikat (Wdh)', phone: '0806 828 0080' },
+            { id: 259, name: 'Dr Rotimi (Nisa)', phone: '0803 353 3835' },
+            { id: 260, name: 'Dr Rufai FMC ( Paed)', phone: '0806 099 2174' },
+            { id: 261, name: 'Dr Ruth', phone: '0803 400 1373' },
+            { id: 262, name: 'Dr Salako', phone: '0803 593 6445' },
+            { id: 263, name: 'Dr Samson O (A&E) Mdh', phone: '0803 474 4452' },
+            { id: 264, name: 'Dr Sarah (Wdh)', phone: '0803 718 1111' },
+            { id: 265, name: 'Dr Sarah Mdh', phone: '0703 055 2164' },
+            { id: 266, name: 'Dr Sekular FMC', phone: '0806 565 0777' },
+            { id: 267, name: 'Dr Senusi (Asokoro) A& E', phone: '0703 799 3264' },
+            { id: 268, name: 'Dr Seun Medimike', phone: '0802 907 1507' },
+            { id: 269, name: 'Dr Shagaya (NH)', phone: '0818 427 6466' },
+            { id: 270, name: 'Dr Shaibu (sugery) FMC', phone: '0805 544 4122' },
+            { id: 271, name: 'Dr Shaibu T. (Mdh)', phone: '0803 821 7899' },
+            { id: 272, name: 'Dr Simon Mdh', phone: '0813 930 7919' },
+            { id: 273, name: 'Dr Sophia Mdh', phone: '0803 429 2707' },
+            { id: 274, name: 'Dr Stephen (Keffi)', phone: '0803 594 7799' },
+            { id: 275, name: 'Dr Stephen Mdh', phone: '0803 400 1373' },
+            { id: 276, name: 'Dr T.H Adamu Fmc', phone: '0803 596 6656' },
+            { id: 277, name: 'Dr T.H Adamu Fmc 2', phone: '0803 596 6656' },
+            { id: 278, name: 'Dr Temi Wdh', phone: '0806 205 3816' },
+            { id: 279, name: 'Dr Thelma (Mdh)', phone: '0803 589 8089' },
+            { id: 280, name: 'Dr Tola (Mdh)', phone: '0803 451 4473' },
+            { id: 281, name: 'Dr Tolani', phone: '0803 613 0667' },
+            { id: 282, name: 'Dr Tony (Mdh)', phone: '0803 666 4381' },
+            { id: 283, name: 'Dr Tony (Uath)', phone: '0803 666 4381' },
+            { id: 284, name: 'Dr Tony FMC', phone: '0803 888 7709' },
+            { id: 285, name: 'Dr Tunde Wdh', phone: '0803 506 6378' },
+            { id: 286, name: 'Dr Uche Mdh', phone: '0803 746 4482' },
+            { id: 287, name: 'Dr Uche (Wdh)', phone: '0803 703 6176' },
+            { id: 288, name: 'Dr Uchenna FMC', phone: '0803 361 0262' },
+            { id: 289, name: 'Dr Uchenna Mdh', phone: '0803 746 4482' },
+            { id: 290, name: 'Dr Ugo (NH)', phone: '0803 300 1198' },
+            { id: 291, name: 'Dr Umma GGH', phone: '0803 969 9999' },
+            { id: 292, name: 'Dr Umar Mdh', phone: '0803 867 0747' },
+            { id: 293, name: 'Dr Usen (Mdh)', phone: '0803 421 8234' },
+            { id: 294, name: 'Dr Usen (Wdh)', phone: '0803 421 8234' },
+            { id: 295, name: 'Dr V. O Wdh', phone: '0703 919 0649' },
+            { id: 296, name: 'Dr Victor Mdh', phone: '0915 892 4548' },
+            { id: 297, name: 'Dr Victor Ovouh', phone: '0818 592 6507' },
+            { id: 298, name: 'Dr Victor Pediatric (FMC)', phone: '0810 576 2982' },
+            { id: 299, name: 'Dr Victor Tabansi Ggh', phone: '2347063350651' },
+            { id: 300, name: 'Dr Victoria O Adh', phone: '0802 841 2330' },
+            { id: 301, name: 'Dr Victoria Primuse Specialist', phone: '+234 813 553 7780' },
+            { id: 302, name: 'Dr Vivian Lagos', phone: '0703 147 8887' },
+            { id: 303, name: 'Dr Wusa Sdc', phone: '0803 686 9051' },
+            { id: 304, name: 'Dr Yusuf Mdh', phone: '0803 702 4323' },
+            { id: 305, name: 'Dr Yusuff (A&E) Fmc', phone: '0806 597 2200' },
+            { id: 306, name: 'Dr Yusuff Mdh', phone: '0803 325 5650' },
+            { id: 307, name: 'Dr Zeenat', phone: '0803 958 0707' },
+            { id: 308, name: 'Dr Zira (Mdh)', phone: '0803 596 6656' },
+            { id: 309, name: 'Dr Zira Mdh', phone: '0803 596 6656' },
+            { id: 310, name: 'Mdh Pediatrics Dr', phone: '0812 923 3698' },
+            { id: 311, name: 'Dr Orisah Goodness', phone: '+375 25 758-77-41' },
+            { id: 312, name: '2nd Dr Hamza Wdh', phone: '0802 691 6636' },
+            { id: 313, name: 'Barrister Dr Chioma Abuja', phone: '0703 838 9624' }
+        ];
+
+        // Inventory populated from provided master list (grouped by category)
+        const inventory = [
+            { id: 1, name: 'FULL BLOOD COUNT', category: 'HEAMATOLOGY', price: 10000 },
+            { id: 2, name: 'ERYTHROCYTE SEDIMENTATION RATE (ESR)', category: 'HEAMATOLOGY', price: 7000 },
+            { id: 3, name: 'HB GENOTYPE', category: 'HEAMATOLOGY', price: 10000 },
+            { id: 4, name: 'BLOOD GROUPING (ABO)', category: 'HEAMATOLOGY', price: 10000 },
+            { id: 5, name: 'RETICULOCYTE COUNT', category: 'HEAMATOLOGY', price: 8000 },
+            { id: 6, name: 'CLOTTING PROFILE', category: 'HEAMATOLOGY', price: 30000 },
+            { id: 7, name: 'CLOTTING TIME', category: 'HEAMATOLOGY', price: 10000 },
+            { id: 8, name: 'BLEEDING TIME', category: 'HEAMATOLOGY', price: 10000 },
+            { id: 9, name: 'PROTHROMBIN TIME', category: 'HEAMATOLOGY', price: 10000 },
+            { id: 10, name: 'PTTK', category: 'HEAMATOLOGY', price: 10000 },
+            { id: 11, name: 'INR (INTERNATIONAL NORMALIZED RATIO)', category: 'HEAMATOLOGY', price: 10000 },
+            { id: 12, name: 'HB GENOTYPING', category: 'HEAMATOLOGY', price: 80000 },
+            { id: 13, name: 'BLOOD FILM', category: 'HEAMATOLOGY', price: 5000 },
+            { id: 14, name: 'PCV', category: 'HEAMATOLOGY', price: 5000 },
+            { id: 15, name: 'PLATELET COUNT', category: 'HEAMATOLOGY', price: 8000 },
+            { id: 16, name: 'VON WILLEBRAND ANTIGEN', category: 'HEAMATOLOGY', price: null },
+            { id: 17, name: 'COMB TEST (ICT, DCT)', category: 'HEAMATOLOGY', price: null },
+            { id: 18, name: 'G6PD', category: 'HEAMATOLOGY', price: 45000 },
+            { id: 19, name: 'FIBRINOGEN', category: 'HEAMATOLOGY', price: 70000 },
+            { id: 20, name: 'C-PEPTIDE', category: 'HEAMATOLOGY', price: 40000 },
+            { id: 21, name: 'AUTOIMMUNE TEST', category: 'HEAMATOLOGY', price: 150000 },
+
+            { id: 22, name: 'FBS', category: 'CLINICAL CHEMISTRY', price: 5000 },
+            { id: 23, name: 'RBS', category: 'CLINICAL CHEMISTRY', price: 5000 },
+            { id: 24, name: 'OGTT', category: 'CLINICAL CHEMISTRY', price: 35000 },
+            { id: 25, name: '2HPP', category: 'CLINICAL CHEMISTRY', price: 12000 },
+            { id: 26, name: 'E/U/C', category: 'CLINICAL CHEMISTRY', price: 20000 },
+            { id: 27, name: 'SODIUM', category: 'CLINICAL CHEMISTRY', price: 10000 },
+            { id: 28, name: 'POTASSIUM', category: 'CLINICAL CHEMISTRY', price: 8000 },
+            { id: 29, name: 'CHLORIDE', category: 'CLINICAL CHEMISTRY', price: 8000 },
+            { id: 30, name: 'BICARBONATE', category: 'CLINICAL CHEMISTRY', price: 8000 },
+            { id: 31, name: 'UREA', category: 'CLINICAL CHEMISTRY', price: 8000 },
+            { id: 32, name: 'CREATININE', category: 'CLINICAL CHEMISTRY', price: 8000 },
+            { id: 33, name: 'LIVER FUNCTION TEST (LFT)', category: 'CLINICAL CHEMISTRY', price: 20000 },
+            { id: 34, name: 'TOTAL BILIRUBIN', category: 'CLINICAL CHEMISTRY', price: 7000 },
+            { id: 35, name: 'DIRECT BILIRUBIN', category: 'CLINICAL CHEMISTRY', price: 7000 },
+            { id: 36, name: 'ALKALINE PHOSPHATASE', category: 'CLINICAL CHEMISTRY', price: 6500 },
+            { id: 37, name: 'ASAT', category: 'CLINICAL CHEMISTRY', price: 6000 },
+            { id: 38, name: 'ALAT', category: 'CLINICAL CHEMISTRY', price: 6000 },
+            { id: 39, name: 'GGT', category: 'CLINICAL CHEMISTRY', price: 6000 },
+            { id: 40, name: 'TOTAL PROTEIN', category: 'CLINICAL CHEMISTRY', price: 6000 },
+            { id: 41, name: 'CALCIUM', category: 'CLINICAL CHEMISTRY', price: 8500 },
+            { id: 42, name: 'ALBUMIN', category: 'CLINICAL CHEMISTRY', price: 8000 },
+            { id: 43, name: 'URIC ACID', category: 'CLINICAL CHEMISTRY', price: 10000 },
+            { id: 44, name: 'BLOOD UREA NITROGEN', category: 'CLINICAL CHEMISTRY', price: 25000 },
+            { id: 45, name: 'FASTING LIPID PROFILE', category: 'CLINICAL CHEMISTRY', price: 20000 },
+            { id: 46, name: 'TOTAL CHOLESTEROL', category: 'CLINICAL CHEMISTRY', price: 20000 },
+            { id: 47, name: 'TRIGLYCERIDES', category: 'CLINICAL CHEMISTRY', price: 8000 },
+            { id: 48, name: 'HDL', category: 'CLINICAL CHEMISTRY', price: 8000 },
+            { id: 49, name: 'LDH', category: 'CLINICAL CHEMISTRY', price: 8000 },
+            { id: 50, name: 'URINALYSIS', category: 'CLINICAL CHEMISTRY', price: 5000 },
+            { id: 51, name: 'GLYCATED HAEMOGLOBIN (HBA1C)', category: 'CLINICAL CHEMISTRY', price: 30000 },
+            { id: 52, name: 'UREA BREATH TEST', category: 'CLINICAL CHEMISTRY', price: 50000 },
+            { id: 53, name: 'RHEUMATOID FACTOR', category: 'CLINICAL CHEMISTRY', price: 30000 },
+            { id: 54, name: 'C-REACTIVE PROTEIN', category: 'CLINICAL CHEMISTRY', price: 30000 },
+
+            { id: 55, name: 'PREGNANCY TEST', category: 'HORMONAL ASSAYS', price: 3500 },
+            { id: 56, name: 'HORMONAL PROFILE', category: 'HORMONAL ASSAYS', price: 65000 },
+            { id: 57, name: 'PROGESTERONE', category: 'HORMONAL ASSAYS', price: 20000 },
+            { id: 58, name: 'LUITINIZING HORMONE', category: 'HORMONAL ASSAYS', price: 20000 },
+            { id: 59, name: 'FOLLICLE STIMULATING HORMONE', category: 'HORMONAL ASSAYS', price: 20000 },
+            { id: 60, name: 'PROLACTIN', category: 'HORMONAL ASSAYS', price: 20000 },
+            { id: 61, name: 'ESTRADIOL', category: 'HORMONAL ASSAYS', price: 20000 },
+            { id: 62, name: 'TESTOSTERONE', category: 'HORMONAL ASSAYS', price: 20000 },
+            { id: 63, name: 'PSA', category: 'HORMONAL ASSAYS', price: 20000 },
+            { id: 64, name: 'THYROID MARKERS (T3,T4,TSH)', category: 'HORMONAL ASSAYS', price: 60000 },
+            { id: 65, name: 'CA-125', category: 'HORMONAL ASSAYS', price: 30000 },
+            { id: 66, name: 'CA 15-3', category: 'HORMONAL ASSAYS', price: 30000 },
+            { id: 67, name: 'CA 19-9', category: 'HORMONAL ASSAYS', price: 30000 },
+            { id: 68, name: 'CALPROTECTIN', category: 'HORMONAL ASSAYS', price: 40000 },
+            { id: 69, name: 'CEA', category: 'HORMONAL ASSAYS', price: 25000 },
+            { id: 70, name: 'CK-MB', category: 'HORMONAL ASSAYS', price: 30000 },
+            { id: 71, name: 'CORTISOL', category: 'HORMONAL ASSAYS', price: 30000 },
+            { id: 72, name: 'CRP', category: 'HORMONAL ASSAYS', price: 35000 },
+            { id: 73, name: 'HS-CRP', category: 'HORMONAL ASSAYS', price: 40000 },
+            { id: 74, name: 'CYSTATIN-C', category: 'HORMONAL ASSAYS', price: 40000 },
+            { id: 75, name: 'D-DIMER', category: 'HORMONAL ASSAYS', price: 30000 },
+            { id: 76, name: 'ALPHA-FETO PROTEIN', category: 'HORMONAL ASSAYS', price: 25000 },
+            { id: 77, name: 'FERRATIN', category: 'HORMONAL ASSAYS', price: 30000 },
+            { id: 78, name: 'FOB (QUALITATIVE)', category: 'HORMONAL ASSAYS', price: 15000 },
+            { id: 79, name: 'BETA-HCG', category: 'HORMONAL ASSAYS', price: 20000 },
+            { id: 80, name: 'INSULIN', category: 'HORMONAL ASSAYS', price: 40000 },
+            { id: 81, name: 'IGE', category: 'HORMONAL ASSAYS', price: 20000 },
+            { id: 82, name: 'MICROALBUMIN', category: 'HORMONAL ASSAYS', price: 50000 },
+            { id: 83, name: 'MYOGLOBULIN', category: 'HORMONAL ASSAYS', price: 40000 },
+            { id: 84, name: 'PROCALCITONIN', category: 'HORMONAL ASSAYS', price: 50000 },
+            { id: 85, name: 'TROPONIN-1', category: 'HORMONAL ASSAYS', price: 30000 },
+            { id: 86, name: 'TROPONIN-T', category: 'HORMONAL ASSAYS', price: 35000 },
+
+            { id: 87, name: 'STOOL M/C/S', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 10000 },
+            { id: 88, name: 'BLOOD CULTURE', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 50000 },
+            { id: 89, name: 'URINE M/C/S', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 10000 },
+            { id: 90, name: 'SWAB', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 10000 },
+            { id: 91, name: 'SPUTUM M/C/S', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 10000 },
+            { id: 92, name: 'AFB MICROSCOPY ×3', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 45000 },
+            { id: 93, name: 'MP', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 5000 },
+            { id: 94, name: 'WIDAL', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 10000 },
+            { id: 95, name: 'PAP SMEAR', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 40000 },
+            { id: 96, name: 'HIV I&II', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 10000 },
+            { id: 97, name: 'HEPATITIS A', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 10000 },
+            { id: 98, name: 'HBSAG', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 10000 },
+            { id: 99, name: 'HCV', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 10000 },
+            { id: 100, name: 'VDRL', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 10000 },
+            { id: 101, name: 'HEPATITIS B PROFILE', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 20000 },
+            { id: 102, name: 'CSF ANALYSIS', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 15000 },
+            { id: 103, name: 'H. PYLORI', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 6000 },
+            { id: 104, name: 'OCCULT BLOOD', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 20000 },
+            { id: 105, name: 'URINE MICROSCOPY', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 10000 },
+            { id: 106, name: 'STOOL MICROSCOPY', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 10000 },
+            { id: 107, name: 'HELICOBACTER PYLORI IGM/IGA/IGG', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 60000 },
+            { id: 108, name: 'RHEUMATOID FACTOR', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 25000 },
+            { id: 109, name: 'GRAM STAIN', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 2000 },
+            { id: 110, name: 'ASO', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 30000 },
+            { id: 111, name: 'CHLAMYDIA IGM/IGG', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 80000 },
+            { id: 112, name: 'MICROFILARIA', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 15000 },
+            { id: 113, name: 'HEPATITIS B VIRUS PROFILE', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 15000 },
+            { id: 114, name: 'TORCH PANEL', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 200000 },
+            { id: 115, name: 'RUBELLA IGM/IGG', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 90000 },
+            { id: 116, name: 'TOXOPLASMA IGG/IGM', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 90000 },
+            { id: 117, name: 'HSV IGM/IGG', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 90000 },
+            { id: 118, name: 'SEMEN ANALYSIS & M/C/S', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 30000 },
+            { id: 119, name: 'SEMEN ANALYSIS', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 15000 },
+            { id: 120, name: 'HIV VIRAL LOAD & DRUG RESISTANCE', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 187000 },
+            { id: 121, name: 'HEPATITIS B VIRAL LOAD', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 50000 },
+            { id: 122, name: 'HCV GENOTYPE', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 120000 },
+            { id: 123, name: 'ANA SCREENING', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 40000 },
+            { id: 124, name: 'ANCA', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 40000 },
+
+            { id: 125, name: 'PELVIC ULTRASOUND', category: 'RADIOLOGY (ULTRASOUND)', price: 12000 },
+            { id: 126, name: 'ABDOMINOPELVIC SCAN', category: 'RADIOLOGY (ULTRASOUND)', price: 15000 },
+            { id: 127, name: 'OBSTETRICS SCAN', category: 'RADIOLOGY (ULTRASOUND)', price: 10000 },
+            { id: 128, name: 'THYROID SCAN', category: 'RADIOLOGY (ULTRASOUND)', price: 18000 },
+            { id: 129, name: 'BREAST SCAN', category: 'RADIOLOGY (ULTRASOUND)', price: 18000 },
+            { id: 130, name: 'TESTICULAR/SCROTAL/PROSTATE', category: 'RADIOLOGY (ULTRASOUND)', price: 18000 },
+            { id: 131, name: 'DOPPLER SCAN (DOUBLE LIMB)', category: 'RADIOLOGY (ULTRASOUND)', price: 100000 },
+            { id: 132, name: 'TRANSCRANIAL DOPPLER', category: 'RADIOLOGY (ULTRASOUND)', price: 50000 },
+            { id: 133, name: 'TESTICULAR SCAN', category: 'RADIOLOGY (ULTRASOUND)', price: 15000 },
+            { id: 134, name: 'RENAL SCAN', category: 'RADIOLOGY (ULTRASOUND)', price: 15000 },
+            { id: 135, name: 'ANOMALY SCAN', category: 'RADIOLOGY (ULTRASOUND)', price: 25000 },
+            { id: 136, name: 'TROSS (TRANSRECTAL ULTRASOUND)', category: 'RADIOLOGY (ULTRASOUND)', price: 20000 },
+            { id: 137, name: 'SONOURETHROGRAM (RCUG)', category: 'RADIOLOGY (ULTRASOUND)', price: 80000 },
+            { id: 138, name: 'ANTERIOR FONTANELLE', category: 'RADIOLOGY (ULTRASOUND)', price: 20000 },
+            { id: 139, name: 'FOLLICULAR TRACKING (3 VISIT)', category: 'RADIOLOGY (ULTRASOUND)', price: 60000 },
+            { id: 140, name: 'TRANSVAGINAL SCAN', category: 'RADIOLOGY (ULTRASOUND)', price: 18000 },
+            { id: 141, name: 'NECK ULTRASOUND', category: 'RADIOLOGY (ULTRASOUND)', price: 18000 },
+            { id: 142, name: 'SOFT TISSUE ULTRASOUND', category: 'RADIOLOGY (ULTRASOUND)', price: 15000 },
+            { id: 143, name: 'SMALL PARTS ULTRASOUND', category: 'RADIOLOGY (ULTRASOUND)', price: 15000 },
+            { id: 144, name: 'PENILE DOPPLER', category: 'RADIOLOGY (ULTRASOUND)', price: 250000 },
+
+            { id: 145, name: 'HAND X-RAY', category: 'RADIOLOGY (X-RAY)', price: 15000 },
+            { id: 146, name: 'WRIST X-RAY', category: 'RADIOLOGY (X-RAY)', price: 15000 },
+            { id: 147, name: 'FOREARM X-RAY', category: 'RADIOLOGY (X-RAY)', price: 15000 },
+            { id: 148, name: 'HUMERUS X-RAY', category: 'RADIOLOGY (X-RAY)', price: 15000 },
+            { id: 149, name: 'SHOULDER X-RAY', category: 'RADIOLOGY (X-RAY)', price: 15000 },
+            { id: 150, name: 'SCAPULAR X-RAY', category: 'RADIOLOGY (X-RAY)', price: 15000 },
+            { id: 151, name: 'FOOT X-RAY', category: 'RADIOLOGY (X-RAY)', price: 15000 },
+            { id: 152, name: 'TIBIA/FIBULA X-RAY', category: 'RADIOLOGY (X-RAY)', price: 15000 },
+            { id: 153, name: 'FEMUR (AP/LAT)', category: 'RADIOLOGY (X-RAY)', price: 15000 },
+            { id: 154, name: 'PELVIC (AP/LAT)', category: 'RADIOLOGY (X-RAY)', price: 15000 },
+            { id: 155, name: 'BOTH HIP JOINTS (AP/LAT)', category: 'RADIOLOGY (X-RAY)', price: 30000 },
+            { id: 156, name: 'CHEST (AP)', category: 'RADIOLOGY (X-RAY)', price: 15000 },
+            { id: 157, name: 'CHEST (AP/LAT)', category: 'RADIOLOGY (X-RAY)', price: 15000 },
+            { id: 158, name: 'SKULL X-RAY', category: 'RADIOLOGY (X-RAY)', price: 15000 },
+            { id: 159, name: 'PARANASAL SINUSES', category: 'RADIOLOGY (X-RAY)', price: 15000 },
+            { id: 160, name: 'MANDIBLE (JAW)', category: 'RADIOLOGY (X-RAY)', price: 15000 },
+            { id: 161, name: 'MAMMOGRAM', category: 'RADIOLOGY (X-RAY)', price: 55000 },
+            { id: 162, name: 'NASOPHARYNX', category: 'RADIOLOGY (X-RAY)', price: 15000 },
+            { id: 163, name: 'THORACIC SPINE (AP/LAT)', category: 'RADIOLOGY (X-RAY)', price: 15000 },
+            { id: 164, name: 'LUMBAR SACRAL (AP/LAT)', category: 'RADIOLOGY (X-RAY)', price: 15000 },
+            { id: 165, name: 'KNEE X-RAY', category: 'RADIOLOGY (X-RAY)', price: 15000 },
+            { id: 166, name: 'CERVICAL X-RAY', category: 'RADIOLOGY (X-RAY)', price: 15000 },
+            { id: 167, name: 'THORACIC INLET', category: 'RADIOLOGY (X-RAY)', price: 15000 },
+            { id: 168, name: 'LOPOGRAM', category: 'RADIOLOGY (X-RAY)', price: 85000 },
+            { id: 169, name: 'POST NASAL SPACE', category: 'RADIOLOGY (X-RAY)', price: 15000 },
+            { id: 170, name: 'ABDOMINAL X-RAY', category: 'RADIOLOGY (X-RAY)', price: 18000 },
+            { id: 171, name: 'SKELETAL SURVEY', category: 'RADIOLOGY (X-RAY)', price: 60000 },
+            { id: 172, name: 'PITUITARY FOSSA', category: 'RADIOLOGY (X-RAY)', price: 15000 },
+            { id: 173, name: 'MASTOIDS', category: 'RADIOLOGY (X-RAY)', price: 20000 },
+            { id: 174, name: 'BARIUM SWALLOW', category: 'RADIOLOGY (X-RAY)', price: 80000 },
+            { id: 175, name: 'BARIUM FOLLOW THROUGH', category: 'RADIOLOGY (X-RAY)', price: 80000 },
+            { id: 176, name: 'BARIUM MEAL', category: 'RADIOLOGY (X-RAY)', price: 80000 },
+            { id: 177, name: 'BARIUM ENEMA', category: 'RADIOLOGY (X-RAY)', price: 80000 },
+            { id: 178, name: 'HSG', category: 'RADIOLOGY (X-RAY)', price: 65000 },
+            { id: 179, name: 'RCUG', category: 'RADIOLOGY (X-RAY)', price: 80000 },
+            { id: 180, name: 'MCUG', category: 'RADIOLOGY (X-RAY)', price: 80000 },
+            { id: 181, name: 'FISTULOGRAM', category: 'RADIOLOGY (X-RAY)', price: 80000 },
+
+            { id: 182, name: 'EEG', category: 'ENDOLUMINAL & CARDIAC STUDIES', price: 70000 },
+            { id: 183, name: 'ECHOCARDIOGRAPHY (CHILDREN)', category: 'ENDOLUMINAL & CARDIAC STUDIES', price: 70000 },
+            { id: 184, name: 'ECHOCARDIOGRAPHY (ADULT)', category: 'ENDOLUMINAL & CARDIAC STUDIES', price: 50000 },
+            { id: 185, name: 'ECG', category: 'ENDOLUMINAL & CARDIAC STUDIES', price: 10000 },
+            { id: 186, name: '24 HOURS HOLTER ECG', category: 'ENDOLUMINAL & CARDIAC STUDIES', price: 100000 },
+            { id: 187, name: 'COLONOSCOPY', category: 'ENDOLUMINAL & CARDIAC STUDIES', price: 205000 },
+            { id: 188, name: 'GASTROSCOPY', category: 'ENDOLUMINAL & CARDIAC STUDIES', price: 195000 },
+            { id: 189, name: 'PHARYNGOSCOPY', category: 'ENDOLUMINAL & CARDIAC STUDIES', price: 185000 },
+            { id: 190, name: 'ESOPHAGOSCOPY', category: 'ENDOLUMINAL & CARDIAC STUDIES', price: 185000 },
+            { id: 191, name: 'MEDICAL EXAMINATION', category: 'ENDOLUMINAL & CARDIAC STUDIES', price: 50000 },
+
+            { id: 192, name: 'CT BRAIN/HEAD', category: 'CT SCAN', price: 80000 },
+            { id: 193, name: 'CT BRAIN + CERVICAL SPINE', category: 'CT SCAN', price: 160000 },
+            { id: 194, name: 'CT ABDOMEN WITH CONTRAST', category: 'CT SCAN', price: 95000 },
+            { id: 195, name: 'CT ABDOMEN/PELVIS WITH CONTRAST', category: 'CT SCAN', price: 100000 },
+            { id: 196, name: 'CT CHEST/ABDOMEN/PELVIS', category: 'CT SCAN', price: 180000 },
+            { id: 197, name: 'CT UROGRAM', category: 'CT SCAN', price: 105000 },
+            { id: 198, name: 'CT CHEST WITH CONTRAST', category: 'CT SCAN', price: 90000 },
+            { id: 199, name: 'CT PARANASAL SINUSES', category: 'CT SCAN', price: 80000 },
+            { id: 200, name: 'CT THORACIC SPINE', category: 'CT SCAN', price: 80000 },
+            { id: 201, name: 'CT NECK', category: 'CT SCAN', price: 85000 },
+            { id: 202, name: 'CT LUMBOSACRAL', category: 'CT SCAN', price: 80000 },
+            { id: 203, name: 'CT GUIDED BIOPSY', category: 'CT SCAN', price: 200000 },
+            { id: 204, name: 'CT THORACOLUMBAR', category: 'CT SCAN', price: 170000 },
+            { id: 205, name: 'CT CRANIOFACIAL', category: 'CT SCAN', price: 85000 },
+            { id: 206, name: 'CT FEMUR', category: 'CT SCAN', price: 85000 },
+            { id: 207, name: 'CT KNEE', category: 'CT SCAN', price: 85000 },
+            { id: 208, name: 'TRIPHASIC LIVER CT', category: 'CT SCAN', price: 100000 },
+
+            { id: 209, name: 'MRI ANKLE', category: 'MRI', price: 170000 },
+            { id: 210, name: 'MRI ABDOMEN/PELVIS', category: 'MRI', price: 250000 },
+            { id: 211, name: 'MRI BRAIN', category: 'MRI', price: 160000 },
+            { id: 212, name: 'MRI BREAST', category: 'MRI', price: 180000 },
+            { id: 213, name: 'MRI C-SPINE', category: 'MRI', price: 160000 },
+            { id: 214, name: 'MRI L-SPINE', category: 'MRI', price: 160000 },
+            { id: 215, name: 'MRI LEG', category: 'MRI', price: 170000 },
+            { id: 216, name: 'MRI ABDOMEN', category: 'MRI', price: 230000 },
+            { id: 217, name: 'MRI FOOT', category: 'MRI', price: 170000 },
+            { id: 218, name: 'MRI HAND', category: 'MRI', price: 170000 },
+            { id: 219, name: 'MRI RENAL', category: 'MRI', price: 170000 },
+            { id: 220, name: 'MRI NECK', category: 'MRI', price: 170000 },
+            { id: 221, name: 'MRI ORBIT', category: 'MRI', price: 185000 },
+            { id: 222, name: 'MRI PELVIS', category: 'MRI', price: 200000 },
+            { id: 223, name: 'MRI PROSTATE', category: 'MRI', price: 195000 },
+            { id: 224, name: 'MRI SHOULDER', category: 'MRI', price: 170000 },
+            { id: 225, name: 'MRI HIP', category: 'MRI', price: 170000 },
+            { id: 226, name: 'MRI BOTH KNEES', category: 'MRI', price: 340000 },
+            { id: 227, name: 'MRI WHOLE BODY', category: 'MRI', price: 650000 },
+            { id: 228, name: 'MRI WHOLE SPINE', category: 'MRI', price: 480000 }
+        ];
+
+        let orders = [];
+
+        // Mock Data - Audit Log
+        let auditLog = [];
+
+        // ====== UTILITY FUNCTIONS ======
+        async function saveData() {
+            if (window.electronAPI) {
+                const dataToSave = {
+                    users,
+                    prList,
+                    inventory,
+                    orders,
+                    auditLog,
+                    companyProfile: appState.companyProfile
+                };
+                await window.electronAPI.saveData(dataToSave);
+            }
+        }
+
+        async function loadData() {
+            if (window.electronAPI) {
+                const loadedData = await window.electronAPI.loadData();
+                if (loadedData) {
+                    users = loadedData.users || [];
+                    prList = loadedData.prList || prList;
+                    inventory = loadedData.inventory || inventory;
+                    
+                    // Convert timestamp strings in orders back to Date objects
+                    orders = (loadedData.orders || []).map(order => ({
+                        ...order,
+                        date: new Date(order.date) // Re-hydrate the date string into a Date object
+                    }));
+
+                    // Convert timestamp strings in auditLog back to Date objects
+                    auditLog = (loadedData.auditLog || []).map(log => ({
+                        ...log,
+                        timestamp: new Date(log.timestamp)
+                    }));
+
+                    appState.companyProfile = loadedData.companyProfile || appState.companyProfile;
+                }
+            }
+        }
+
+        function generatePID() {
+            return 'P' + Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+        }
+
+        function formatCurrency(amount) {
+            if (amount === null || amount === undefined || isNaN(Number(amount))) return 'N/A';
+            return '₦' + Number(amount).toLocaleString('en-NG', { minimumFractionDigits: 2 });
+        }
+
+        function calculateDiscount(total, discountAmount) {
+            return Math.max(0, Math.min(total, discountAmount));
+        }
+
+        function logAction(action, details) {
+            auditLog.unshift({ // unshift to add to the beginning for easy sorting
+                id: auditLog.length + 1,
+                timestamp: new Date(),
+                user: appState.currentUser.fullName,
+                role: appState.currentUser.role,
+                action: action,
+                details: details
+            });
+            saveData(); // Save after every action
+        }
+
+        function getOrderStats() {
+            const stats = {
+                totalRevenue: orders.reduce((sum, order) => order.status === 'PAID' ? sum + order.total : sum, 0),
+                pendingBalance: orders.reduce((sum, order) => order.status === 'PENDING' ? sum + order.total : sum, 0),
+                totalOrders: orders.length,
+                paidOrders: orders.filter(o => o.status === 'PAID').length
+            };
+            return stats;
+        }
+
+        function getTopTests() {
+            const testCount = {};
+            orders.forEach(order => {
+                order.services.forEach(service => {
+                    const name = (typeof service === 'string') ? service : (service && service.name ? service.name : 'Unknown');
+                    testCount[name] = (testCount[name] || 0) + 1;
+                });
+            });
+            return Object.entries(testCount)
+                .map(([name, count]) => ({ name, count }))
+                .sort((a, b) => b.count - a.count)
+                .slice(0, 5);
+        }
+
+        function getPRPerformance() {
+            const prStats = {};
+            orders.forEach(order => {
+                if (!prStats[order.referredBy]) {
+                    prStats[order.referredBy] = { orders: 0, revenue: 0 };
+                }
+                prStats[order.referredBy].orders += 1;
+                prStats[order.referredBy].revenue += order.total;
+            });
+
+            return Object.entries(prStats)
+                .map(([name, stats]) => ({ name, ...stats }))
+                .sort((a, b) => b.revenue - a.revenue)
+                .slice(0, 5);
+        }
+
+        function getPaymentStats() {
+            const stats = {
+                fullPayment: orders.filter(o => o.paymentStatus === 'full').length,
+                installment: orders.filter(o => o.paymentStatus === 'installment').length
+            };
+            return stats;
+        }
+
+        function getFilteredRecords() {
+            const filters = appState.recordFilters;
+            let filtered = [...orders];
+
+            // 1. Apply search query first
+            if (filters.searchQuery) {
+                const query = filters.searchQuery.toLowerCase();
+                filtered = filtered.filter(order => 
+                    order.patientName.toLowerCase().includes(query) || 
+                    order.pid.toLowerCase().includes(query)
+                );
+            }
+            
+            // 2. Apply date/time filters on the already searched results
+            return filtered.filter(order => {
+                const orderDate = new Date(order.date); // Ensure we are working with a Date object
+                if (filters.filterType === 'day' && filters.date) {
+                    if (orderDate.toISOString().split('T')[0] !== filters.date) return false;
+                }
+                if (filters.filterType === 'month' && filters.month) {
+                    const orderMonth = orderDate.toISOString().substring(0, 7);
+                    if (orderMonth !== filters.month) return false;
+                }
+                if (filters.filterType === 'year' && filters.year) {
+                    const orderYear = orderDate.getFullYear().toString();
+                    if (orderYear !== filters.year) return false;
+                }
+                if (filters.filterType === 'time' && filters.time) {
+                    if (!order.time || !order.time.startsWith(filters.time.split(':')[0])) return false;
+                }
+                return true;
+            });
+        }
+
+        function exportToCSV() {
+            let csv = 'Patient Name,PID,Services,Total,Status,Referred By,Staff Name,Date,Time,Payment Method,Payment Status\n';
+            orders.forEach(order => {
+                const serviceNames = order.services.map(s => (typeof s === 'string') ? s : (s && s.name ? s.name : '')).join('; ');
+                const orderDate = new Date(order.date).toISOString().split('T')[0];
+                csv += `"${order.patientName}","${order.pid}","${serviceNames}",${order.total},"${order.status}","${order.referredBy}","${order.staffName}","${orderDate}","${order.time || 'N/A'}","${order.paymentMethod || 'N/A'}","${order.paymentStatus || 'N/A'}"\n`;
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `orders_${new Date().toISOString().split('T')[0]}.csv`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+        }
+
+        // ====== RENDER FUNCTIONS ======
+        function loadPreferences() {
+            // Load theme
+            const savedTheme = localStorage.getItem('appTheme') || 'light';
+            const savedColorTheme = localStorage.getItem('appColorTheme') || 'blue';
+            
+            appState.theme = savedTheme;
+            appState.colorTheme = savedColorTheme;
+            
+            // Load company profile
+            const savedProfile = localStorage.getItem('companyProfile');
+            if (savedProfile) {
+                appState.companyProfile = JSON.parse(savedProfile);
+            }
+
+            applyTheme();
+        }
+
+        function applyTheme() {
+            const html = document.documentElement;
+            
+            if (appState.theme === 'dark') {
+                html.classList.add('dark-mode');
+            } else {
+                html.classList.remove('dark-mode');
+            }
+            
+            // Remove all theme classes and add the active one
+            html.classList.remove('theme-blue', 'theme-skyblue', 'theme-gray', 'theme-brown', 'theme-green', 'theme-purple');
+            html.classList.add(`theme-${appState.colorTheme}`);
+            
+            // Save preferences
+            localStorage.setItem('appTheme', appState.theme);
+            localStorage.setItem('appColorTheme', appState.colorTheme);
+        }
+
+        function toggleTheme(mode) {
+            appState.theme = mode;
+            applyTheme();
+            renderApp();
+        }
+
+        function changeColorTheme(theme) {
+            appState.colorTheme = theme;
+            applyTheme();
+            renderApp();
+        }
+
+        function renderSidebar() {
+            const collapsed = appState.sidebarCollapsed;
+            const isAdmin = appState.currentUser && appState.currentUser.role === 'Admin';
+
+            return `
+                <div class="sidebar ${collapsed ? 'collapsed' : ''}">
+                    <div class="sidebar-header">
+                        <div class="sidebar-logo">SDC</div>
+                        <button class="sidebar-toggle" onclick="toggleSidebar()">
+                            ${collapsed ? '→' : '←'}
+                        </button>
+                    </div>
+                    
+                    <nav class="sidebar-nav">
+                        <div class="nav-item ${appState.currentView === 'dashboard' ? 'active' : ''}" onclick="navigateTo('dashboard')">
+                            <div class="nav-item-icon">📊</div>
+                            <div class="nav-item-label">Dashboard</div>
+                        </div>
+                        
+                        <div class="nav-item ${appState.currentView === 'billing' ? 'active' : ''}" onclick="navigateTo('billing')">
+                            <div class="nav-item-icon">📋</div>
+                            <div class="nav-item-label">Billing</div>
+                        </div>
+                        
+                        <div class="nav-item ${appState.currentView === 'inventory' ? 'active' : ''}" onclick="navigateTo('inventory')">
+                            <div class="nav-item-icon">🧪</div>
+                            <div class="nav-item-label">Inventory</div>
+                        </div>
+                        
+                        ${isAdmin ? `
+                        <div class="nav-item ${appState.currentView === 'pr-management' ? 'active' : ''}" onclick="navigateTo('pr-management')">
+                            <div class="nav-item-icon">👥</div>
+                            <div class="nav-item-label">PR Management</div>
+                        </div>
+                        
+                        <div class="nav-item ${appState.currentView === 'analytics' ? 'active' : ''}" onclick="navigateTo('analytics')">
+                            <div class="nav-item-icon">📈</div>
+                            <div class="nav-item-label">Analytics</div>
+                        </div>
+
+                        <div class="nav-item ${appState.currentView === 'history' ? 'active' : ''}" onclick="navigateTo('history')">
+                            <div class="nav-item-icon">📜</div>
+                            <div class="nav-item-label">History</div>
+                        </div>
+
+                        <div class="nav-item ${appState.currentView === 'staff-management' ? 'active' : ''}" onclick="navigateTo('staff-management')">
+                            <div class="nav-item-icon">🧑‍💼</div>
+                            <div class="nav-item-label">Staff Management</div>
+                        </div>
+                        ` : ''}
+                        
+                        <div class="nav-item ${appState.currentView === 'records' ? 'active' : ''}" onclick="navigateTo('records')">
+                            <div class="nav-item-icon">📁</div>
+                            <div class="nav-item-label">Records</div>
+                        </div>
+                        
+                        <!-- Added settings nav item -->
+                        <div class="nav-item ${appState.currentView === 'settings' ? 'active' : ''}" onclick="navigateTo('settings')">
+                            <div class="nav-item-icon">⚙️</div>
+                            <div class="nav-item-label">Settings</div>
+                        </div>
+                    </nav>
+                    
+                    <div class="sidebar-footer">
+                        <button class="nav-item" onclick="logout()" style="width: 100%; justify-content: center; background-color: rgba(239, 68, 68, 0.2); color: #fecaca;">
+                            <div class="nav-item-icon">🚪</div>
+                            <div class="nav-item-label">Logout</div>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderHeader() {
+            return `
+                <div class="header ${appState.sidebarCollapsed ? 'sidebar-collapsed' : ''}">
+                    <div style="display: flex; align-items: center; gap: 1rem;">
+                        <div class="header-title">${appState.companyProfile.name.split(' ')[0]}</div>
+                        <div class="header-role">${appState.currentUser.role} Dashboard</div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 2rem;">
+                        <div id="header-datetime" style="text-align: right;">
+                            <div id="header-time" style="font-size: 1.25rem; font-weight: 700;"></div>
+                            <div id="header-date" style="font-size: 0.8rem; opacity: 0.9;"></div>
+                        </div>
+                        <div class="header-user">
+                            <span>👤 ${appState.currentUser.fullName}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function updateHeaderDateTime() {
+            const timeEl = document.getElementById('header-time');
+            const dateEl = document.getElementById('header-date');
+            if (timeEl && dateEl) {
+                const now = new Date();
+                timeEl.textContent = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                dateEl.textContent = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+            }
+        }
+
+        function renderLogin() {
+            // If no users exist, show setup form for first admin
+            if (users.length === 0) {
+                return `
+                    <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);">
+                        <div class="card" style="width: 100%; max-width: 500px; transform: scale(1); animation: popIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);">
+                            <div style="text-align: center; margin-bottom: 2rem;">
+                                <div style="font-size: 3rem; margin-bottom: 1rem;">${appState.companyProfile.logo}</div>
+                                <h1 style="font-size: 1.5rem; font-weight: 700; color: var(--primary);">${appState.companyProfile.name}</h1>
+                                <p style="color: var(--text-secondary); font-size: 0.875rem;">Initial Setup - Create Admin Account</p>
+                            </div>
+
+                            <div style="background: var(--background); padding: 1rem; border-radius: 0.5rem; margin-bottom: 1.5rem; border-left: 4px solid var(--accent);">
+                                <p style="font-size: 0.9rem; color: var(--text-secondary); margin: 0;">No users found. Please create the first admin account to begin.</p>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Full Name *</label>
+                                <input type="text" id="setupFullName" class="form-input" placeholder="e.g., John Administrator" />
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Username *</label>
+                                <input type="text" id="setupUsername" class="form-input" placeholder="e.g., admin" />
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Password *</label>
+                                <input type="password" id="setupPassword" class="form-input" placeholder="Minimum 6 characters" />
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Confirm Password *</label>
+                                <input type="password" id="setupPasswordConfirm" class="form-input" placeholder="Confirm password" />
+                            </div>
+
+                            <button onclick="handleFirstTimeSetup()" class="btn-primary" style="width: 100%; padding: 0.75rem; font-size: 1rem; margin-top: 1rem;">
+                                Create Admin Account
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Normal login form
+            return `
+                <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);">
+                    <div class="card" style="width: 100%; max-width: 400px; transform: scale(1); animation: popIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);">
+                        <div style="text-align: center; margin-bottom: 2rem;">
+                            <div style="font-size: 3rem; margin-bottom: 1rem;">${appState.companyProfile.logo}</div>
+                            <h1 style="font-size: 1.5rem; font-weight: 700; color: var(--primary);">${appState.companyProfile.name}</h1>
+                            <p style="color: var(--text-secondary); font-size: 0.875rem;">Diagnostic Center Management</p>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Username</label>
+                            <input type="text" id="loginUsername" class="form-input" placeholder="Enter your username" />
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Password</label>
+                            <input type="password" id="loginPassword" class="form-input" placeholder="Enter password" />
+                        </div>
+
+                        <button onclick="handleLogin()" class="btn-primary" style="width: 100%; padding: 0.75rem; font-size: 1rem; margin-top: 1rem;">
+                            Sign In
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderDashboard() {
+            return `
+                <div style="max-width: 1400px; margin: 0 auto;">
+                    <h2 style="font-size: 2rem; font-weight: 700; margin-bottom: 2rem;">Welcome, ${appState.currentUser.fullName}! 👋</h2>
+
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+                        <div class="quick-card animate-slide-in" style="animation-delay: 0s;" onclick="navigateTo('billing')">
+                            <div style="font-size: 2rem; margin-bottom: 0.5rem;">📝</div>
+                            <div style="font-weight: 600; margin-bottom: 0.25rem;">New Patient Entry</div>
+                            <div style="font-size: 0.875rem; opacity: 0.9;">Start billing process</div>
+                        </div>
+
+                        <div class="quick-card animate-slide-in" style="animation-delay: 0.1s;" onclick="navigateTo('records')">
+                            <div style="font-size: 2rem; margin-bottom: 0.5rem;">📁</div>
+                            <div style="font-weight: 600; margin-bottom: 0.25rem;">Patient Records</div>
+                            <div style="font-size: 0.875rem; opacity: 0.9;">View historical data</div>
+                        </div>
+
+                        <div class="quick-card accent animate-slide-in" style="animation-delay: 0.2s;" onclick="navigateTo('inventory')">
+                            <div style="font-size: 2rem; margin-bottom: 0.5rem;">🧪</div>
+                            <div style="font-weight: 600; margin-bottom: 0.25rem;">Inventory</div>
+                            <div style="font-size: 0.875rem; opacity: 0.9;">View available tests</div>
+                        </div>
+
+                        ${appState.currentUser.role === 'Admin' ? `
+                        <div class="quick-card animate-slide-in" style="animation-delay: 0.3s;" onclick="navigateTo('pr-management')">
+                            <div style="font-size: 2rem; margin-bottom: 0.5rem;">👥</div>
+                            <div style="font-weight: 600; margin-bottom: 0.25rem;">PR Management</div>
+                            <div style="font-size: 0.875rem; opacity: 0.9;">Manage professionals</div>
+                        </div>
+
+                        <div class="quick-card animate-slide-in" style="animation-delay: 0.4s;" onclick="navigateTo('analytics')">
+                            <div style="font-size: 2rem; margin-bottom: 0.5rem;">📊</div>
+                            <div style="font-weight: 600; margin-bottom: 0.25rem;">Analytics</div>
+                            <div style="font-size: 0.875rem; opacity: 0.9;">View reports & insights</div>
+                        </div>
+
+                        <div class="quick-card accent animate-slide-in" style="animation-delay: 0.5s;" onclick="navigateTo('staff-management')">
+                            <div style="font-size: 2rem; margin-bottom: 0.5rem;">🧑‍💼</div>
+                            <div style="font-weight: 600; margin-bottom: 0.25rem;">Staff Management</div>
+                            <div style="font-size: 0.875rem; opacity: 0.9;">Add or remove staff</div>
+                        </div>
+                        ` : ''}
+                    </div>
+
+                    <div class="card animate-fade-in">
+                        <h3 style="font-weight: 700; margin-bottom: 1rem; font-size: 1.125rem;">Quick Stats</h3>
+                        <div class="grid-2">
+                            <div style="padding: 1rem; background-color: var(--background); border-radius: 0.5rem;">
+                                <p style="color: var(--text-secondary); font-size: 0.875rem;">Total Orders</p>
+                                <p style="font-size: 1.75rem; font-weight: 700; color: var(--primary);">${orders.length}</p>
+                            </div>
+                            <div style="padding: 1rem; background-color: var(--background); border-radius: 0.5rem;">
+                                <p style="color: var(--text-secondary); font-size: 0.875rem;">Paid Orders</p>
+                                <p style="font-size: 1.75rem; font-weight: 700; color: var(--success);">${orders.filter(o => o.status === 'PAID').length}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderBilling() {
+            return `
+                <div style="max-width: 900px; margin: 0 auto;">
+                    <h2 style="font-size: 2rem; font-weight: 700; margin-bottom: 2rem;">Patient Billing</h2>
+
+                    <div class="wizard-header animate-slide-up">
+                        <div class="step-indicator ${appState.billingStep >= 1 ? 'active' : ''} ${appState.billingStep > 1 ? 'completed' : ''}">
+                            <div class="step-number">${appState.billingStep > 1 ? '✓' : '1'}</div>
+                            <div class="step-label">Patient Details</div>
+                        </div>
+                        <div style="width: 2rem; height: 0.125rem; background-color: var(--border); margin-top: 1rem;"></div>
+                        <div class="step-indicator ${appState.billingStep >= 2 ? 'active' : ''} ${appState.billingStep > 2 ? 'completed' : ''}">
+                            <div class="step-number">${appState.billingStep > 2 ? '✓' : '2'}</div>
+                            <div class="step-label">Services</div>
+                        </div>
+                        <div style="width: 2rem; height: 0.125rem; background-color: var(--border); margin-top: 1rem;"></div>
+                        <div class="step-indicator ${appState.billingStep >= 3 ? 'active' : ''}">
+                            <div class="step-number">${appState.billingStep === 3 ? '3' : ''}</div>
+                            <div class="step-label">Finalize</div>
+                        </div>
+                    </div>
+
+                    <!-- Step 1: Patient Details -->
+                    <div id="step1" class="${appState.billingStep !== 1 ? 'hidden' : ''} animate-slide-up">
+                        <div class="card">
+                            <h3 style="font-weight: 700; margin-bottom: 1.5rem; font-size: 1.25rem;">Patient Information</h3>
+
+                            <div class="form-group">
+                                <label class="form-label">Patient Name *</label>
+                                <input type="text" id="patientName" class="form-input" placeholder="Enter patient full name" value="${appState.billingData.patientName}" />
+                            </div>
+
+                            <div class="grid-2">
+                                <div class="form-group">
+                                    <label class="form-label">Patient ID (Auto-generated)</label>
+                                    <input type="text" class="form-input" value="${appState.billingData.pid || generatePID()}" readonly />
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Contact Number</label>
+                                    <input type="tel" id="patientContact" class="form-input" placeholder="Phone number" value="${appState.billingData.contact}" />
+                                </div>
+                            </div>
+
+                            <div class="grid-2">
+                                <div class="form-group">
+                                    <label class="form-label">Referred By</label>
+                                    <div style="position:relative;">
+                                        <input type="text" id="referredBySearch" class="form-input" placeholder="Type PR agent name..." value="${appState.billingData.referredBy || ''}" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem; font-size:1rem;" />
+                                        <div id="prSuggestions" style="position:absolute; top:100%; left:0; right:0; background:var(--background); border:1px solid var(--border); border-top:none; max-height:200px; overflow-y:auto; z-index:100; display:none; border-radius:0 0 0.25rem 0.25rem;"></div>
+                                    </div>
+                                    <div id="addPRAgentContainer" style="margin-top:0.5rem; display:none;">
+                                        <button id="addNewPRBtn" class="btn-secondary" style="padding:0.4rem 0.75rem; font-size:0.85rem;">+ Add New PR Agent</button>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Staff Name *</label>
+                                    <input type="text" id="staffName" class="form-input" placeholder="Your name" value="${appState.billingData.staffName}" />
+                                </div>
+                            </div>
+
+                            <div style="display: flex; gap: 1rem; margin-top: 2rem;">
+                                <button onclick="billingStep(2)" class="btn-primary">Next: Select Services</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 2: Services Selection -->
+                    <div id="step2" class="${appState.billingStep !== 2 ? 'hidden' : ''} animate-slide-up">
+                        <div class="card">
+                            <h3 style="font-weight: 700; margin-bottom: 1.5rem; font-size: 1.25rem;">Select Services</h3>
+
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                                <div style="font-size:0.95rem; color:var(--text-secondary);">Quick picks: recent / popular services</div>
+                                <div style="display:flex; gap:0.5rem; align-items:center;">
+                                    <label style="font-size:0.9rem; color:var(--text-secondary);">VIP Form</label>
+                                    <button class="btn-secondary" onclick="toggleVIPMode()" style="padding:0.25rem 0.75rem; font-size:0.85rem;">
+                                        ${appState.vipMode ? 'Disable VIP' : 'Enable VIP'}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Popular / Recent Suggestions -->
+                            <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:1rem;">
+                                ${(() => {
+                                    const top = getTopTests();
+                                    if (!top || top.length === 0) return '<div style="color:var(--text-secondary);">No recent services</div>';
+                                    return top.map(t => {
+                                        const inv = inventory.find(i => i.name === t.name);
+                                        const id = inv ? inv.id : '';
+                                        return `<button class="btn-secondary" onclick="addServiceById(${id})">${t.name}</button>`;
+                                    }).join('');
+                                })()}
+                            </div>
+
+                            <!-- Search / Autocomplete -->
+                            <div style="margin-bottom:1rem; display:flex; gap:0.5rem; align-items:center;">
+                                <input id="serviceSearch" class="form-input" placeholder="Type a test or category name to search..." style="flex:1;" />
+                                <button class="btn-primary" onclick="openCategoryList()" title="Browse categories">Browse</button>
+                            </div>
+                            <div id="serviceSuggestions" style="margin-bottom:1rem; display:block;"></div>
+
+                            <!-- Selected Services (compact list is displayed in the preview below) -->
+                            <div style="font-size:0.9rem;color:var(--text-secondary); margin-bottom: 0.75rem;">Selected services are shown in the preview panel below.</div>
+
+                            <div class="form-group">
+                                <label class="form-label">Discount Amount</label>
+                                <input type="number" id="discount" class="form-input" placeholder="Enter discount (₦)" value="${appState.billingData.discount}" />
+                            </div>
+
+                            <div style="background-color: var(--background); padding: 1.5rem; border-radius: 0.5rem; margin-bottom: 2rem;">
+                                <div id="selectedServicesList" style="margin-bottom: 1rem; font-size: 0.9rem; border-bottom: 1px solid var(--border); padding-bottom: 1rem;">
+                                    <div style="color: var(--text-secondary); text-align: center;">No services selected yet.</div>
+                                </div>
+
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                                    <span>Subtotal:</span>
+                                    <span id="subtotal">₦0.00</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 1rem; color: var(--text-secondary);">
+                                    <span>Discount:</span>
+                                    <span id="discountDisplay">-₦0.00</span>
+                                </div>
+                                <div style="border-top: 1px solid var(--border); padding-top: 1rem; display: flex; justify-content: space-between; font-weight: 700; font-size: 1.125rem;">
+                                    <span>Total:</span>
+                                    <span id="totalAmount" style="color: var(--primary);">₦0.00</span>
+                                </div>
+                            </div>
+
+                            <div style="display: flex; gap: 1rem;">
+                                <button onclick="billingStep(1)" class="btn-secondary">← Back</button>
+                                <button onclick="billingStep(3)" class="btn-primary">Next: Finalize Payment</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 3: Finalize Payment -->
+                    <div id="step3" class="${appState.billingStep !== 3 ? 'hidden' : ''} animate-pop">
+                        <div class="card">
+                            <h3 style="font-weight: 700; margin-bottom: 1.5rem; font-size: 1.25rem;">Payment Information</h3>
+
+                            <!-- Added Payment Method Section -->
+                            <div style="margin-bottom: 2rem;">
+                                <label class="form-label" style="margin-bottom: 1rem;">Payment Method *</label>
+                                <div class="payment-method">
+                                    <div class="payment-option ${appState.billingData.paymentMethod === 'cash' ? 'active' : ''}" onclick="selectPaymentMethod('cash')">
+                                        <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">💵</div>
+                                        <div style="font-weight: 500;">Cash</div>
+                                    </div>
+                                    <div class="payment-option ${appState.billingData.paymentMethod === 'pos' ? 'active' : ''}" onclick="selectPaymentMethod('pos')">
+                                        <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">💳</div>
+                                        <div style="font-weight: 500;">POS</div>
+                                    </div>
+                                    <div class="payment-option ${appState.billingData.paymentMethod === 'transfer' ? 'active' : ''}" onclick="selectPaymentMethod('transfer')">
+                                        <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🏦</div>
+                                        <div style="font-weight: 500;">Transfer</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Added Payment Status Section -->
+                            <div style="margin-bottom: 2rem;">
+                                <label class="form-label" style="margin-bottom: 1rem;">Payment Status *</label>
+                                <div class="payment-method">
+                                    <div class="payment-option ${appState.billingData.paymentStatus === 'full' ? 'active' : ''}" onclick="selectPaymentStatus('full')">
+                                        <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">✅</div>
+                                        <div style="font-weight: 500;">Full Payment</div>
+                                    </div>
+                                    <div class="payment-option ${appState.billingData.paymentStatus === 'installment' ? 'active' : ''}" onclick="selectPaymentStatus('installment')">
+                                        <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">📅</div>
+                                        <div style="font-weight: 500;">Installment</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Added Amount Paid for Installment -->
+                            ${appState.billingData.paymentStatus === 'installment' ? `
+                                <div class="form-group animate-fade-in">
+                                    <label class="form-label">Amount Paid *</label>
+                                    <input type="number" id="amountPaid" class="form-input" placeholder="Enter amount being paid" value="${appState.billingData.amountPaid}" oninput="updateInstallmentPayment(this.value)" />
+                                </div>
+                                <div style="font-size: 1rem; margin-bottom: 2rem; text-align: right;">
+                                    Remaining Balance: 
+                                    <strong style="color: var(--error); font-size: 1.25rem;">
+                                        ${formatCurrency(appState.billingData.balance)}
+                                    </strong>
+                                </div>
+                            ` : ''}
+
+                            <div style="background-color: var(--background); padding: 1.5rem; border-radius: 0.5rem; margin-bottom: 2rem;">
+                                <h4 style="font-weight: 600; margin-bottom: 1rem;">Receipt Preview</h4>
+                                <div style="border: 1px solid var(--border); padding: 1.5rem; background-color: white; border-radius: 0.5rem;">
+                                    <div style="text-align: center; margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 1rem;">
+                                        <div style="font-size: 2rem; margin-bottom: 0.5rem;">${appState.companyProfile.logo}</div>
+                                        <div style="font-size: 1.25rem; font-weight: 700; color: var(--text-primary);">${appState.companyProfile.name}</div>
+                                        <div style="font-size: 0.8rem; color: var(--text-secondary);">
+                                            <p>${appState.companyProfile.address}</p>
+                                            <p>${appState.companyProfile.email} | ${appState.companyProfile.contact}</p>
+                                        </div>
+                                        <div style="font-size: 0.875rem; color: var(--text-secondary);">Receipt</div>
+                                    </div>
+
+                                    <div style="margin-bottom: 1rem; font-size: 0.9rem;">
+                                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                                            <span><strong>Patient:</strong></span>
+                                            <span id="receiptPatient">${appState.billingData.patientName}</span>
+                                        </div>
+                                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                                            <span><strong>PID:</strong></span>
+                                            <span id="receiptPID">${appState.billingData.pid}</span>
+                                        </div>
+                                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                                            <span><strong>Staff:</strong></span>
+                                            <span id="receiptStaff">${appState.billingData.staffName}</span>
+                                        </div>
+                                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                                            <span><strong>Date:</strong></span>
+                                            <span>${new Date().toLocaleDateString()}</span>
+                                        </div>
+                                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                                            <span><strong>Time:</strong></span>
+                                            <span>${new Date().toLocaleTimeString()}</span>
+                                        </div>
+                                    </div>
+
+                                    <div style="border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 1rem 0; font-size: 0.9rem; margin-bottom: 1rem;">
+                                        <div style="font-weight: 600; margin-bottom: 0.5rem;">Services:</div>
+                                        <div id="receiptServices">
+                                            ${appState.billingData.selectedServices.map(s => `
+                                                <div style="display: flex; justify-content: space-between; margin-bottom:0.25rem;">
+                                                    <div>
+                                                        <div>• ${s.name}</div>
+                                                        <div style="font-size:0.8rem; color:var(--text-secondary);">${s.category || ''}</div>
+                                                    </div>
+                                                    <div style="font-weight:700">${formatCurrency(s.overridePrice != null ? s.overridePrice : s.price)}</div>
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+
+                                    <div style="font-size: 0.9rem;">
+                                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                                            <span>Total:</span>
+                                            <span id="receiptTotal"></span>
+                                        </div>
+                                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; color: var(--text-secondary);">
+                                            <span>Payment Method:</span>
+                                            <span id="receiptPaymentMethod">${appState.billingData.paymentMethod || 'N/A'}</span>
+                                        </div>
+                                        ${appState.billingData.paymentStatus === 'installment' ? `
+                                            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; color: var(--text-secondary);">
+                                                <span>Amount Paid:</span>
+                                                <span id="receiptAmountPaid">${formatCurrency(appState.billingData.amountPaid)}</span>
+                                            </div>
+                                            <div style="display: flex; justify-content: space-between; font-weight: 600; color: var(--error);">
+                                                <span>Balance Due:</span>
+                                                <span id="receiptBalance">${formatCurrency(appState.billingData.balance)}</span>
+                                            </div>
+                                        ` : `
+                                            <div style="display: flex; justify-content: space-between; font-weight: 600; color: var(--success);">
+                                                <span>Status:</span>
+                                                <span id="receiptPaymentStatus">Full Payment</span>
+                                            </div>
+                                        `}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style="display: flex; gap: 1rem;">
+                                <button onclick="billingStep(2)" class="btn-secondary">← Back</button>
+                                <button onclick="submitBilling()" class="btn-primary">✓ Complete Billing</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Helper for action buttons to avoid repetition
+        function renderActionButtons(onSave, onCancel) {
+            return `
+                <button onclick="${onSave}" class="btn-primary" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">✓</button>
+                <button onclick="${onCancel}" class="btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">×</button>
+            `;
+        }
+        function renderInventory() {
+            return `
+                <div style="max-width: 1200px; margin: 0 auto;" class="animate-slide-up">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                        <h2 style="font-size: 2rem; font-weight: 700;">Inventory & Test Pricing</h2>
+                        ${appState.currentUser.role === 'Admin' ? `
+                            <button onclick="toggleAddInventoryForm()" class="btn-primary">
+                                ${appState.showAddInventoryForm ? '× Cancel' : '+ Add New Test'}
+                            </button>
+                        ` : ''}
+                    </div>
+
+                    <!-- Add New Inventory Form -->
+                    ${appState.showAddInventoryForm ? `
+                        <div class="card animate-fade-in" style="margin-bottom: 2rem;">
+                            <h3 style="font-weight: 700; margin-bottom: 1.5rem; font-size: 1.25rem;">Add New Inventory Item</h3>
+                            <div class="grid-3">
+                                <div class="form-group">
+                                    <label class="form-label">Test Name</label>
+                                    <input type="text" id="newInventoryName" class="form-input" placeholder="e.g., ECG">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Category</label>
+                                    <input type="text" id="newInventoryCategory" class="form-input" placeholder="e.g., Cardiology">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Price</label>
+                                    <input type="number" id="newInventoryPrice" class="form-input" placeholder="e.g., 2500">
+                                </div>
+                            </div>
+                            <button onclick="addNewInventoryItem()" class="btn-primary" style="margin-top: 1rem;">✓ Save Item</button>
+                        </div>
+                    ` : ''}
+
+                    <div class="card">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Test Name</th>
+                                    <th>Category</th>
+                                    <th style="text-align: right;">Price</th>
+                                    ${appState.currentUser.role === 'Admin' ? '<th>Actions</th>' : ''}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${(() => {
+                                    const groups = inventory.reduce((acc, s) => {
+                                        if (!acc[s.category]) acc[s.category] = [];
+                                        acc[s.category].push(s);
+                                        return acc;
+                                    }, {});
+
+                                    return Object.keys(groups).map(cat => `
+                                        <tr>
+                                            <td colspan="${appState.currentUser.role === 'Admin' ? 4 : 3}" style="background: var(--background); font-weight:700;">${cat}</td>
+                                        </tr>
+                                        ${groups[cat].map(item => {
+                                            if (appState.editingInventoryId === item.id) {
+                                                return `
+                                                    <tr class="animate-fade-in">
+                                                        <td><input type="text" id="editInventoryName-${item.id}" value="${item.name}" class="form-input"></td>
+                                                        <td><input type="text" id="editInventoryCategory-${item.id}" value="${item.category}" class="form-input"></td>
+                                                        <td style="text-align: right;"><input type="number" id="editInventoryPrice-${item.id}" value="${item.price ?? ''}" class="form-input"></td>
+                                                        ${appState.currentUser.role === 'Admin' ? `<td style="white-space: nowrap; display: flex; gap: 0.5rem;">${renderActionButtons(`saveInventoryEdit(${item.id})`, `cancelEdit('inventory')`)}</td>` : ''}
+                                                    </tr>
+                                                `;
+                                            }
+                                            return `
+                                                <tr>
+                                                    <td><strong>${item.name}</strong></td>
+                                                    <td><span class="badge badge-primary">${item.category}</span></td>
+                                                    <td style="font-weight: 700; color: var(--primary); text-align: right;">${formatCurrency(item.price)}</td>
+                                                    ${appState.currentUser.role === 'Admin' ? `<td style="white-space: nowrap; display: flex; gap: 0.5rem;"><button onclick="toggleEdit('inventory', ${item.id})" class="btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">✏️ Edit</button><button onclick="deleteInventoryItem(${item.id})" class="btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.8rem; color: var(--error);">🗑️ Delete</button></td>` : ''}
+                                                </tr>
+                                            `;
+                                        }).join('')}
+                                    `).join('');
+                                })()}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div style="margin-top: 1.5rem;">
+                        <button onclick="navigateTo('dashboard')" class="btn-secondary">Back to Dashboard</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderPRManagement() {
+            if (appState.currentUser.role !== 'Admin') {
+                return `<div class="card"><p>Access Denied: Only admins can manage PR</p></div>`;
+            }
+
+            return `
+                <div style="max-width: 1200px; margin: 0 auto;" class="animate-slide-up">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                        <h2 style="font-size: 2rem; font-weight: 700;">PR Management</h2>
+                        <button onclick="toggleAddPRForm()" class="btn-primary">
+                            ${appState.showAddPRForm ? '× Cancel' : '+ Add New PR'}
+                        </button>
+                    </div>
+
+                    <!-- Add New PR Form -->
+                    ${appState.showAddPRForm ? `
+                        <div class="card animate-fade-in" style="margin-bottom: 2rem;">
+                            <h3 style="font-weight: 700; margin-bottom: 1.5rem; font-size: 1.25rem;">Add New Professional</h3>
+                            <div class="grid-2">
+                                <div class="form-group">
+                                    <label class="form-label">PR Name *</label>
+                                    <input type="text" id="newPRName" class="form-input" placeholder="e.g., Dr. John Doe">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Contact Number *</label>
+                                    <input type="tel" id="newPRPhone" class="form-input" placeholder="e.g., 0803 123 4567">
+                                </div>
+                            </div>
+                            <button onclick="addNewPR()" class="btn-primary" style="margin-top: 1rem;">✓ Save Professional</button>
+                        </div>
+                    ` : ''}
+
+                    <div class="card">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>PR Name</th>
+                                    <th>Contact Phone</th>
+                                    <th style="text-align: right;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${prList.map(pr => {
+                                    if (appState.editingPRId === pr.id) {
+                                        return `
+                                            <tr class="animate-fade-in">
+                                                <td><input type="text" id="editPRName-${pr.id}" value="${pr.name}" class="form-input"></td>
+                                                <td><input type="tel" id="editPRPhone-${pr.id}" value="${pr.phone}" class="form-input"></td>
+                                                <td style="text-align: right; white-space: nowrap; display: flex; gap: 0.5rem; justify-content: flex-end;">
+                                                    ${renderActionButtons(`savePREdit(${pr.id})`, `cancelEdit('pr')`)}
+                                                </td>
+                                            </tr>
+                                        `;
+                                    }
+                                    return `
+                                        <tr>
+                                            <td><strong>${pr.name}</strong></td>
+                                            <td>${pr.phone}</td>
+                                            <td style="text-align: right; white-space: nowrap; display: flex; gap: 0.5rem; justify-content: flex-end;">
+                                                <button onclick="toggleEdit('pr', ${pr.id})" class="btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">✏️ Edit</button>
+                                                <button onclick="deletePR(${pr.id})" class="btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.8rem; color: var(--error);">🗑️ Delete</button>
+                                            </td>
+                                        </tr>
+                                    `;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div style="margin-top: 1.5rem;">
+                        <button onclick="navigateTo('dashboard')" class="btn-secondary">Back to Dashboard</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderAnalytics() {
+            const stats = getOrderStats();
+            const topTests = getTopTests();
+            const prPerformance = getPRPerformance();
+            const paymentStats = getPaymentStats();
+            const isAdmin = appState.currentUser.role === 'Admin';
+
+            return `
+                <div style="max-width: 1400px; margin: 0 auto;">
+                    <h2 style="font-size: 2rem; font-weight: 700; margin-bottom: 2rem;">Analytics & Reports</h2>
+
+                    <!-- Key Financial Metrics -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+                        <div class="stat-box animate-slide-up" style="border-left: 4px solid var(--success); animation-delay: 0s;">
+                            <p class="stat-label">Total Revenue (YTD)</p>
+                            <p class="stat-value" style="color: var(--success);">${formatCurrency(stats.totalRevenue)}</p>
+                            <p style="font-size: 0.75rem; color: var(--text-secondary);">${stats.paidOrders} orders completed</p>
+                        </div>
+                        <div class="stat-box animate-slide-up" style="border-left: 4px solid var(--warning); animation-delay: 0.1s;">
+                            <p class="stat-label">Outstanding Balance</p>
+                            <p class="stat-value" style="color: var(--warning);">${formatCurrency(stats.pendingBalance)}</p>
+                            <p style="font-size: 0.75rem; color: var(--text-secondary);">Awaiting payment</p>
+                        </div>
+                        <div class="stat-box animate-slide-up" style="border-left: 4px solid var(--primary); animation-delay: 0.2s;">
+                            <p class="stat-label">Average Value</p>
+                            <p class="stat-value">${formatCurrency(stats.totalOrders > 0 ? (stats.totalRevenue + stats.pendingBalance) / stats.totalOrders : 0)}</p>
+                            <p style="font-size: 0.75rem; color: var(--text-secondary);">Per patient</p>
+                        </div>
+                        <div class="stat-box accent animate-slide-up" style="border-left: 4px solid var(--accent); animation-delay: 0.3s;">
+                            <p class="stat-label">Total Orders</p>
+                            <p class="stat-value">${stats.totalOrders}</p>
+                            <p style="font-size: 0.75rem; color: var(--text-secondary);">All orders</p>
+                        </div>
+                    </div>
+
+                    <!-- Payment Status Distribution -->
+                    <div class="card animate-slide-up">
+                        <h3 style="font-weight: 700; margin-bottom: 1.5rem; font-size: 1.25rem;">Payment Status Distribution</h3>
+                        <div class="chart-container">
+                            <div class="chart-item">
+                                <div class="chart-label">Full Payments</div>
+                                <div class="chart-bar-container">
+                                    <div class="chart-bar" style="width: ${paymentStats.fullPayment > 0 ? (paymentStats.fullPayment / (paymentStats.fullPayment + paymentStats.installment)) * 100 : 0}%;">
+                                        ${paymentStats.fullPayment > 0 ? paymentStats.fullPayment : '0'}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="chart-item">
+                                <div class="chart-label">Installment Payments</div>
+                                <div class="chart-bar-container">
+                                    <div class="chart-bar" style="width: ${paymentStats.installment > 0 ? (paymentStats.installment / (paymentStats.fullPayment + paymentStats.installment)) * 100 : 0}%; background: linear-gradient(90deg, var(--warning) 0%, var(--accent) 100%);">
+                                        ${paymentStats.installment > 0 ? paymentStats.installment : '0'}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- PR Performance -->
+                    <div class="card animate-slide-up" style="margin-top: 2rem;">
+                        <h3 style="font-weight: 700; margin-bottom: 1.5rem; font-size: 1.25rem;">Top Referring Professionals</h3>
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Rank</th>
+                                    <th>PR Name</th>
+                                    <th>Total Orders</th>
+                                    <th>Revenue Generated</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${prPerformance.map((pr, idx) => `
+                                    <tr>
+                                        <td><strong>#${idx + 1}</strong></td>
+                                        <td>${pr.name}</td>
+                                        <td><span class="badge badge-primary">${pr.orders}</span></td>
+                                        <td style="font-weight: 700; color: var(--success);">${formatCurrency(pr.revenue)}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Top Tests -->
+                    <div class="card animate-slide-up" style="margin-top: 2rem;">
+                        <h3 style="font-weight: 700; margin-bottom: 1.5rem; font-size: 1.25rem;">Top 5 Most Ordered Tests</h3>
+                        <div class="chart-container">
+                            ${topTests.map(test => {
+                                const maxCount = topTests[0]?.count || 1;
+                                return `
+                                    <div class="chart-item">
+                                        <div class="chart-label">${test.name}</div>
+                                        <div class="chart-bar-container">
+                                            <div class="chart-bar" style="width: ${(test.count / maxCount) * 100}%;">
+                                                ${test.count}
+                                            </div>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+
+                    <!-- Data Export -->
+                    <div class="card animate-slide-up" style="margin-top: 2rem;">
+                        <h3 style="font-weight: 700; margin-bottom: 1rem;">Data Export</h3>
+                        <button onclick="exportData()" class="btn-primary ${!isAdmin ? 'disabled' : ''}" ${!isAdmin ? 'disabled' : ''}>
+                            📥 One-Click Data Export (CSV)
+                        </button>
+                        ${!isAdmin ? '<p style="margin-top: 0.5rem; font-size: 0.875rem; color: var(--text-secondary);">Only admins can export data</p>' : ''}
+                    </div>
+
+                    <div style="margin-top: 1.5rem;">
+                        <button onclick="navigateTo('dashboard')" class="btn-secondary">Back to Dashboard</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderStaffManagement() {
+            if (appState.currentUser.role !== 'Admin') {
+                return `<div class="card"><p>Access Denied: Only admins can manage staff.</p></div>`;
+            }
+
+            // Get all staff (excluding current admin)
+            const staffList = users.filter(u => u.username !== appState.currentUser.username);
+
+            return `
+                <div style="max-width: 1200px; margin: 0 auto;" class="animate-slide-up">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                        <h2 style="font-size: 2rem; font-weight: 700;">Staff Management</h2>
+                        <button onclick="toggleAddStaffForm()" class="btn-primary">
+                            ${appState.showAddStaffForm ? '× Cancel' : '+ Add New Staff'}
+                        </button>
+                    </div>
+
+                    <!-- Add New Staff Form -->
+                    ${appState.showAddStaffForm ? `
+                        <div class="card animate-fade-in" style="margin-bottom: 2rem;">
+                            <h3 style="font-weight: 700; margin-bottom: 1.5rem; font-size: 1.25rem;">Add New Staff Member</h3>
+                            <div class="grid-3">
+                                <div class="form-group">
+                                    <label class="form-label">Full Name *</label>
+                                    <input type="text" id="newStaffFullName" class="form-input" placeholder="e.g., Jane Doe">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Username *</label>
+                                    <input type="text" id="newStaffUsername" class="form-input" placeholder="e.g., janedoe">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Password *</label>
+                                    <input type="password" id="newStaffPassword" class="form-input" placeholder="Minimum 6 characters">
+                                </div>
+                            </div>
+                            <button onclick="addNewStaff()" class="btn-primary" style="margin-top: 1rem;">✓ Save Staff</button>
+                        </div>
+                    ` : ''}
+
+                    <div class="card">
+                        <h3 style="font-weight: 700; margin-bottom: 1.5rem;">Current Users</h3>
+                        ${staffList.length === 0 ? `
+                            <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                                <p>No staff members added yet. Click "+ Add New Staff" to create one.</p>
+                            </div>
+                        ` : `
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Full Name</th>
+                                        <th>Username</th>
+                                        <th>Role</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${staffList.map(user => `
+                                        <tr>
+                                            <td><strong>${user.fullName}</strong></td>
+                                            <td>${user.username}</td>
+                                            <td><span class="badge badge-primary">${user.role}</span></td>
+                                            <td>
+                                                <button onclick="deleteStaff('${user.username}')" class="btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.8rem; color: var(--error);">🗑️ Delete</button>
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        `}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderRecords() {
+            const filteredRecords = getFilteredRecords();
+            
+            return `
+                <div style="max-width: 1400px; margin: 0 auto;">
+                    <h2 style="font-size: 2rem; font-weight: 700; margin-bottom: 2rem;">Patient Records</h2>
+
+                    <!-- Added Filter Section -->
+                    <div class="card animate-slide-up" style="margin-bottom: 2rem;">
+                        <h3 style="font-weight: 700; margin-bottom: 1rem;">Filter Records</h3>
+                        <div class="filter-section">
+                            <div class="filter-group" style="flex: 2;">
+                                <label>Search by Patient Name or PID</label>
+                                <input type="text" id="searchQuery" placeholder="Search..." value="${appState.recordFilters.searchQuery}" oninput="updateFilter('searchQuery', this.value)">
+                            </div>
+                            <div class="filter-group">
+                                <label>Filter Type</label>
+                                <select id="filterType" onchange="updateFilterType(this.value)">
+                                    <option value="all">All Records</option>
+                                    <option value="day">By Day</option>
+                                    <option value="month">By Month</option>
+                                    <option value="year">By Year</option>
+                                    <option value="time">By Time</option>
+                                </select>
+                            </div>
+                            ${appState.recordFilters.filterType === 'day' ? `
+                                <div class="filter-group">
+                                    <label>Select Date</label>
+                                    <input type="date" id="filterDate" value="${appState.recordFilters.date}" onchange="updateFilter('date', this.value)">
+                                </div>
+                            ` : ''}
+                            ${appState.recordFilters.filterType === 'month' ? `
+                                <div class="filter-group">
+                                    <label>Select Month</label>
+                                    <input type="month" id="filterMonth" value="${appState.recordFilters.month}" onchange="updateFilter('month', this.value)">
+                                </div>
+                            ` : ''}
+                            ${appState.recordFilters.filterType === 'year' ? `
+                                <div class="filter-group">
+                                    <label>Select Year</label>
+                                    <input type="number" id="filterYear" placeholder="YYYY" value="${appState.recordFilters.year}" onchange="updateFilter('year', this.value)">
+                                </div>
+                            ` : ''}
+                            ${appState.recordFilters.filterType === 'time' ? `
+                                <div class="filter-group">
+                                    <label>Select Hour</label>
+                                    <input type="time" id="filterTime" value="${appState.recordFilters.time}" onchange="updateFilter('time', this.value)">
+                                </div>
+                            ` : ''}
+                            <div class="filter-group">
+                                <button onclick="clearFilters()">Clear Filters</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card animate-fade-in">
+                        <h3 style="font-weight: 700; margin-bottom: 1.5rem;">All Patient Records ${filteredRecords.length < orders.length ? `(${filteredRecords.length} of ${orders.length})` : ''}</h3>
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Patient Name</th>
+                                    <th>PID</th>
+                                    <th>Services</th>
+                                    <th>Total</th>
+                                    <th>Status</th>
+                                    <th>Referred By</th>
+                                    <th>Staff Name</th>
+                                    <th>Date</th>
+                                    <th>Time</th>
+                                    <th>Payment</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${filteredRecords.length > 0 ? filteredRecords.map(order => `
+                                    <tr>                                        <td><a href="#" onclick="viewOrderDetails(${order.id})" style="color: var(--primary); text-decoration: underline; font-weight: 500;">${order.patientName}</a></td>
+                                        <td><strong>${order.pid}</strong></td>
+                                        <td style="font-size: 0.85rem;">${order.services.map(s => (typeof s === 'string') ? s : (s && s.name ? s.name : '')).join(', ')}</td>
+                                        <td>${formatCurrency(order.total)}</td>
+                                        <td><span class="badge ${order.status === 'PAID' ? 'badge-success' : 'badge-warning'}">${order.status}</span></td>
+                                        <td style="font-size: 0.9rem;">${order.referredBy}</td>
+                                        <td style="font-weight: 500;">${order.staffName}</td>
+                                        <td>${order.date.toISOString().split('T')[0]}</td>
+                                        <td>${order.time || 'N/A'}</td>
+                                        <td><span class="badge ${order.paymentStatus === 'full' ? 'badge-full' : 'badge-installment'}">${order.paymentStatus === 'full' ? 'Full' : 'Installment'}</span></td>
+                                    </tr>
+                                `).join('') : `
+                                    <tr>
+                                        <td colspan="10" style="text-align: center; color: var(--text-secondary); padding: 2rem;">No records found for the selected filter.</td>
+                                    </tr>
+                                `}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div style="margin-top: 1.5rem;">
+                        <button onclick="navigateTo('dashboard')" class="btn-secondary">Back to Dashboard</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderOrderDetailsModal() {
+            if (appState.viewingOrderId === null) return '';
+
+            const order = orders.find(o => o.id === appState.viewingOrderId);
+            if (!order) return '';
+
+            const hasOutstandingPayment = order.paymentStatus === 'installment' && order.balance > 0;
+
+            return `
+                <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 2000;">
+                    <div class="card animate-pop" style="width: 90%; max-width: 650px; max-height: 90vh; overflow-y: auto;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                            <h3 style="font-size: 1.5rem; font-weight: 700;">Record Details: ${order.pid}</h3>
+                            <button onclick="closeOrderDetails()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; line-height: 1;">&times;</button>
+                        </div>
+
+                        <div class="grid-2" style="gap: 1rem; margin-bottom: 1.5rem; background-color: var(--background); padding: 1rem; border-radius: 0.5rem;">
+                            <div><strong>Patient:</strong> ${order.patientName}</div>
+                            <div><strong>PID:</strong> ${order.pid}</div>
+                            <div><strong>Date:</strong> ${order.date.toISOString().split('T')[0]} at ${order.time || 'N/A'}</div>
+                            <div><strong>Referred By:</strong> ${order.referredBy}</div>
+                            <div><strong>Processed By:</strong> ${order.staffName}</div>
+                        </div>
+
+                        <div style="margin-bottom: 1.5rem;">
+                            <h4 style="font-weight: 600; margin-bottom: 0.5rem;">Services Rendered</h4>
+                            <ul style="list-style: disc; padding-left: 1.5rem;">
+                                ${order.services.map(s => `<li>${(typeof s === 'string') ? s : (s && s.name ? s.name : 'Unnamed')}</li>`).join('')}
+                            </ul>
+                        </div>
+
+                        <div>
+                            <h4 style="font-weight: 600; margin-bottom: 1rem;">Payment Summary</h4>
+                            <div style="background-color: var(--background); padding: 1rem; border-radius: 0.5rem;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;"><span>Total Bill:</span> <strong>${formatCurrency(order.total)}</strong></div>
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;"><span>Payment Method:</span> <span>${order.paymentMethod}</span></div>
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;"><span>Amount Paid:</span> <span>${formatCurrency(order.amountPaid)}</span></div>
+                                <div style="display: flex; justify-content: space-between; color: ${order.balance > 0 ? 'var(--error)' : 'var(--success)'};"><span>Balance:</span> <strong>${formatCurrency(order.balance)}</strong></div>
+                            </div>
+                        </div>
+
+                        ${hasOutstandingPayment ? `
+                            <button onclick="markAsFullyPaid(${order.id})" class="btn-primary" style="margin-top: 2rem; width: 100%; background-color: var(--success);">✓ Mark as Fully Paid & Print Receipt</button>
+                        ` : ''}
+
+                        <button onclick="closeOrderDetails()" class="btn-secondary" style="margin-top: 1rem; width: 100%;">Close</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderSettings() {
+            const colorThemes = [
+                { name: 'Blue', id: 'blue', colors: ['#0e4a7c', '#14b8a6'] },
+                { name: 'Skyblue', id: 'skyblue', colors: ['#0369a1', '#06b6d4'] },
+                { name: 'Gray', id: 'gray', colors: ['#374151', '#6b7280'] },
+                { name: 'Brown', id: 'brown', colors: ['#92400e', '#a16207'] },
+                { name: 'Green', id: 'green', colors: ['#166534', '#059669'] },
+                { name: 'Purple', id: 'purple', colors: ['#6b21a8', '#9333ea'] }
+            ];
+
+            const isAdmin = appState.currentUser.role === 'Admin';
+
+            const companyProfileSection = `
+                <div class="settings-card">
+                    <div class="settings-card-title">Company Profile</div>
+                    <p style="color: var(--text-secondary); margin-bottom: 1.5rem; font-size: 0.9rem;">Manage your company's information. This will be reflected on receipts and the login page.</p>
+                    
+                    <div class="grid-2" style="margin-bottom: 1rem;">
+                        <div class="form-group">
+                            <label class="form-label">Company Name</label>
+                            <input type="text" id="companyName" class="form-input" value="${appState.companyProfile.name}">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Contact Number</label>
+                            <input type="text" id="companyContact" class="form-input" value="${appState.companyProfile.contact}">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Address</label>
+                        <input type="text" id="companyAddress" class="form-input" value="${appState.companyProfile.address}">
+                    </div>
+                    <div class="grid-2">
+                        <div class="form-group">
+                            <label class="form-label">Email Address</label>
+                            <input type="email" id="companyEmail" class="form-input" value="${appState.companyProfile.email}">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Logo (URL or Emoji)</label>
+                            <input type="text" id="companyLogo" class="form-input" value="${appState.companyProfile.logo}">
+                        </div>
+                    </div>
+                    <button onclick="saveCompanyProfile()" class="btn-primary" style="margin-top: 1rem;">Save Profile</button>
+                </div>
+            `;
+            return `
+                <div class="animate-slide-up">
+                    <h1 style="font-size: 2rem; font-weight: 700; margin-bottom: 2rem; color: var(--text-primary);">Settings</h1>
+                    
+                    <div class="settings-card">
+                        <div class="settings-card-title">Theme Mode</div>
+                        <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.9rem;">Choose between light and dark mode for your preferred viewing experience</p>
+                        <div class="mode-toggle">
+                            <button class="mode-toggle-btn ${appState.theme === 'light' ? 'active' : ''}" onclick="toggleTheme('light')">
+                                ☀️ Light Mode
+                            </button>
+                            <button class="mode-toggle-btn ${appState.theme === 'dark' ? 'active' : ''}" onclick="toggleTheme('dark')">
+                                🌙 Dark Mode
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="settings-card">
+                        <div class="settings-card-title">Color Theme</div>
+                        <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.9rem;">Select your preferred color palette for the application</p>
+                        <div class="settings-grid">
+                            ${colorThemes.map(theme => `
+                                <div class="theme-option ${appState.colorTheme === theme.id ? 'active' : ''}" onclick="changeColorTheme('${theme.id}')">
+                                    <div class="theme-preview">
+                                        <div style="flex: 1; background-color: ${theme.colors[0]};"></div>
+                                        <div style="flex: 1; background-color: ${theme.colors[1]};"></div>
+                                    </div>
+                                    <div style="font-weight: 500; color: var(--text-primary);">${theme.name}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    ${isAdmin ? companyProfileSection : ''}
+
+                    <div class="settings-card">
+                        <div class="settings-card-title">About</div>
+                        <p style="color: var(--text-secondary); margin-bottom: 0.5rem;"><strong>Application:</strong> Silhouette Diagnostic Consultants</p>
+                        <p style="color: var(--text-secondary); margin-bottom: 0.5rem;"><strong>Version:</strong> 2.0</p>
+                        <p style="color: var(--text-secondary);"><strong>Status:</strong> Active and Running</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderHistory() {
+            if (appState.currentUser.role !== 'Admin') {
+                return `<div class="card"><p>Access Denied: Only admins can view the history log.</p></div>`;
+            }
+
+            return `
+                <div style="max-width: 1400px; margin: 0 auto;" class="animate-slide-up">
+                    <h2 style="font-size: 2rem; font-weight: 700; margin-bottom: 2rem;">Application History Log</h2>
+
+                    <div class="card">
+                        <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">This log shows all significant changes made within the application. It is read-only.</p>
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Timestamp</th>
+                                    <th>User</th>
+                                    <th>Role</th>
+                                    <th>Action</th>
+                                    <th>Details</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${auditLog.length > 0 ? auditLog.map(log => `
+                                    <tr>
+                                        <td style="white-space: nowrap; font-size: 0.85rem;">${log.timestamp instanceof Date ? log.timestamp.toLocaleString() : 'Invalid Date'}</td>
+                                        <td><strong>${log.user}</strong></td>
+                                        <td><span class="badge ${log.role === 'Admin' ? 'badge-error' : 'badge-primary'}">${log.role}</span></td>
+                                        <td style="font-weight: 500;">${log.action.replace('_', ' ')}</td>
+                                        <td style="font-size: 0.9rem;">${log.details}</td>
+                                    </tr>
+                                `).join('') : `
+                                    <tr>
+                                        <td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 2rem;">No history records found.</td>
+                                    </tr>
+                                `}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div style="margin-top: 1.5rem;">
+                        <button onclick="navigateTo('dashboard')" class="btn-secondary">Back to Dashboard</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // ====== EVENT HANDLERS ======
+        function attachEventListeners() {
+            // Service selection checkboxes
+            document.querySelectorAll('.service-checkbox').forEach(checkbox => {
+                checkbox.addEventListener('change', function() {
+                    // if user toggles a classic checkbox, sync to appState.selectedServices
+                    const id = this.dataset.id;
+                    if (this.checked) addServiceById(id);
+                    else removeServiceById(id);
+                    updateBillingCalculations();
+                });
+            });
+
+            // Discount input
+            document.getElementById('discount')?.addEventListener('input', updateBillingCalculations);
+
+            // Service item click: toggle checkbox unless click target is an input (checkbox or override price)
+            document.querySelectorAll('.service-item').forEach(item => {
+                item.addEventListener('click', function(e) {
+                    const target = e.target;
+                    if (target && (target.closest('.override-price') || target.closest('.service-checkbox') || target.tagName === 'INPUT')) {
+                        // let the input handle the event
+                        return;
+                    }
+                    const checkbox = this.querySelector('.service-checkbox');
+                    if (checkbox) {
+                        checkbox.checked = !checkbox.checked;
+                        updateBillingCalculations();
+                    }
+                });
+            });
+
+            // Override price inputs (shown in VIP mode)
+            document.querySelectorAll('.override-price').forEach(input => {
+                input.addEventListener('input', function() {
+                    const id = this.dataset.id;
+                    const val = parseFloat(this.value);
+                    const svc = appState.billingData.selectedServices && appState.billingData.selectedServices.find(x => String(x.id) === String(id));
+                    if (svc) {
+                        svc.overridePrice = !isNaN(val) && val >= 0 ? val : null;
+                    }
+                    updateBillingCalculations();
+                });
+            });
+
+            // PR agent search input
+            const prSearchInput = document.getElementById('referredBySearch');
+            if (prSearchInput) {
+                prSearchInput.addEventListener('input', function() {
+                    renderPRSuggestions(this.value);
+                });
+                prSearchInput.addEventListener('focus', function() {
+                    // Show suggestions on focus
+                    renderPRSuggestions(this.value);
+                });
+                prSearchInput.addEventListener('blur', function() {
+                    // Hide suggestions after a short delay (to allow click)
+                    setTimeout(() => {
+                        document.getElementById('prSuggestions').style.display = 'none';
+                    }, 200);
+                });
+            }
+
+            // PR suggestions click handler (delegated)
+            const prSuggestionsDiv = document.getElementById('prSuggestions');
+            if (prSuggestionsDiv) {
+                prSuggestionsDiv.addEventListener('click', function(e) {
+                    const item = e.target.closest('.pr-suggestion-item');
+                    if (!item) return;
+                    const name = item.dataset.name;
+                    const phone = item.dataset.phone;
+                    selectPRAgent(name, phone);
+                });
+            }
+
+            // Add new PR agent button
+            const addPRBtn = document.getElementById('addNewPRBtn');
+            if (addPRBtn) {
+                addPRBtn.addEventListener('click', addNewPRAgent);
+            }
+
+            // Service search input
+            const searchInput = document.getElementById('serviceSearch');
+            if (searchInput) {
+                searchInput.addEventListener('input', function() {
+                    renderServiceSuggestions(this.value);
+                });
+                searchInput.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        // If there's a first suggestion, pick it
+                        const first = document.querySelector('#serviceSuggestions .suggestion-item');
+                        if (first) first.click();
+                    }
+                });
+            }
+
+            // Suggestion click handler (delegated)
+            document.getElementById('serviceSuggestions')?.addEventListener('click', function(e) {
+                const btn = e.target.closest('.suggestion-item');
+                if (!btn) return;
+                const id = btn.dataset.id;
+                if (id) addServiceById(id);
+                else {
+                    // category click: expand category list
+                    const cat = btn.dataset.category;
+                    renderServiceSuggestions(cat, {expandCategory: true});
+                }
+            });
+
+            // Selected services remove (delegated)
+            document.getElementById('selectedServicesList')?.addEventListener('click', function(e) {
+                const rem = e.target.closest('.remove-selected');
+                if (!rem) return;
+                const id = rem.dataset.id;
+                removeServiceById(id);
+                renderApp();
+            });
+
+            // VIP override input change (delegated)
+            document.getElementById('selectedServicesList')?.addEventListener('change', function(e) {
+                const inp = e.target.closest('.vip-override-input');
+                if (!inp) return;
+                const id = inp.dataset.id;
+                const newPrice = inp.value ? parseFloat(inp.value) : null;
+                const service = appState.billingData.selectedServices.find(s => String(s.id) === String(id));
+                if (service) {
+                    service.overridePrice = (newPrice != null && !isNaN(newPrice)) ? newPrice : null;
+                    updateBillingCalculations();
+                }
+            });
+
+            // Call updateBillingCalculations to populate the preview panel on initial render
+            updateBillingCalculations();
+        }
+
+        // --- Helper functions for PR agent search/add ---
+        function renderPRSuggestions(query) {
+            const suggestionsDiv = document.getElementById('prSuggestions');
+            const addBtn = document.getElementById('addPRAgentContainer');
+            if (!suggestionsDiv) return;
+
+            const lowerQuery = (query || '').toLowerCase().trim();
+            const matches = prList.filter(pr => pr.name.toLowerCase().includes(lowerQuery));
+
+            if (lowerQuery && matches.length === 0) {
+                // No matches and user typed something: show "add new" option
+                suggestionsDiv.innerHTML = `
+                    <div style="padding:0.5rem; color:var(--text-secondary); font-size:0.9rem;">
+                        No results for "${query}"
+                    </div>
+                `;
+                addBtn.style.display = 'block';
+                suggestionsDiv.style.display = 'block';
+            } else if (matches.length > 0) {
+                // Show matched suggestions
+                suggestionsDiv.innerHTML = matches.map(pr => `
+                    <div class="pr-suggestion-item" data-name="${pr.name}" data-phone="${pr.phone}" style="padding:0.5rem; border-bottom:1px solid var(--border); cursor:pointer; hover: background:var(--primary-light);">
+                        <div style="font-weight:500;">${pr.name}</div>
+                        <div style="font-size:0.8rem; color:var(--text-secondary);">${pr.phone}</div>
+                    </div>
+                `).join('');
+                addBtn.style.display = 'none';
+                suggestionsDiv.style.display = 'block';
+            } else {
+                suggestionsDiv.style.display = 'none';
+                addBtn.style.display = 'none';
+            }
+        }
+
+        function selectPRAgent(name, phone) {
+            const input = document.getElementById('referredBySearch');
+            if (input) input.value = name;
+            appState.billingData.referredBy = name;
+            document.getElementById('prSuggestions').style.display = 'none';
+            document.getElementById('addPRAgentContainer').style.display = 'none';
+        }
+
+        function addNewPRAgent() {
+            const query = document.getElementById('referredBySearch').value.trim();
+            if (!query) {
+                alert('Please enter a PR agent name');
+                return;
+            }
+            const phone = prompt(`Enter phone number for "${query}":`, '');
+            if (phone === null) return; // user cancelled
+            if (!phone.trim()) {
+                alert('Phone number is required');
+                return;
+            }
+            // Add to prList
+            const newId = (prList.length > 0 ? Math.max(...prList.map(p => p.id)) : 0) + 1;
+            prList.push({ id: newId, name: query, phone: phone.trim() });
+            appState.billingData.referredBy = query;
+            document.getElementById('referredBySearch').value = query;
+            document.getElementById('prSuggestions').style.display = 'none';
+            document.getElementById('addPRAgentContainer').style.display = 'none';
+            logAction('ADD_PR_AGENT', `New PR agent added: ${query} (${phone})`);
+        }
+
+        function handleLogin() {
+            const username = document.getElementById('loginUsername').value.trim();
+            const password = document.getElementById('loginPassword').value;
+
+            if (!username || !password) {
+                alert('Please enter both username and password');
+                return;
+            }
+
+            // Check if user exists in the users array
+            const user = users.find(u => u.username === username);
+            if (user && user.password === password) {
+                appState.currentUser = { username, role: user.role, fullName: user.fullName };
+                logAction('LOGIN', `User '${user.fullName}' logged in.`);
+                appState.currentView = 'dashboard';
+                renderApp();
+            } else {
+                alert('Invalid username or password. If no users exist, please set up the first admin user.');
+            }
+        }
+
+        function handleFirstTimeSetup() {
+            const setupName = document.getElementById('setupFullName').value.trim();
+            const setupUsername = document.getElementById('setupUsername').value.trim();
+            const setupPassword = document.getElementById('setupPassword').value;
+            const setupPasswordConfirm = document.getElementById('setupPasswordConfirm').value;
+
+            if (!setupName || !setupUsername || !setupPassword || !setupPasswordConfirm) {
+                alert('Please fill in all fields');
+                return;
+            }
+
+            if (setupPassword !== setupPasswordConfirm) {
+                alert('Passwords do not match');
+                return;
+            }
+
+            if (setupPassword.length < 6) {
+                alert('Password must be at least 6 characters');
+                return;
+            }
+
+            // Create first admin user
+            users.push({
+                username: setupUsername,
+                password: setupPassword,
+                role: 'Admin',
+                fullName: setupName
+            });
+
+            saveData(); // Save the new user
+            // Set user BEFORE logging action
+            appState.currentUser = { username: setupUsername, role: 'Admin', fullName: setupName };
+            logAction('SETUP', `First admin user created: ${setupName} (${setupUsername})`);
+            appState.currentView = 'dashboard';
+            renderApp();
+        }
+
+        function logout() {
+            logAction('LOGOUT', `User '${appState.currentUser.fullName}' logged out.`);
+            appState.currentUser = null;
+            appState.currentView = 'login';
+            appState.billingStep = 1;
+            saveData(); // Persist any final state changes
+            renderApp();
+        }
+
+        function navigateTo(view) {
+            appState.currentView = view;
+            appState.billingStep = 1;
+            appState.editingPRId = null; // Cancel any edits when navigating away
+            appState.editingInventoryId = null;
+            resetAddForms(); // Reset forms when navigating away
+            clearFilters(); // Clear filters when navigating away from records
+            renderApp();
+        }
+
+        function toggleSidebar() {
+            appState.sidebarCollapsed = !appState.sidebarCollapsed;
+            renderApp();
+        }
+
+        function billingStep(step) {
+            if (step === 2) {
+                appState.billingData.patientName = document.getElementById('patientName').value;
+                appState.billingData.contact = document.getElementById('patientContact').value;
+                appState.billingData.referredBy = document.getElementById('referredBySearch').value;
+                appState.billingData.staffName = document.getElementById('staffName').value;
+                appState.billingData.pid = document.getElementById('patientName').value ? (appState.billingData.pid || generatePID()) : '';
+
+                if (!appState.billingData.patientName || !appState.billingData.staffName) {
+                    alert('Please fill in Patient Name and Staff Name');
+                    return;
+                }
+            }
+            appState.billingStep = step;
+            renderApp();
+        }
+
+        function updateBillingCalculations() {
+            let subtotal = 0;
+            const selectedServicesListEl = document.getElementById('selectedServicesList');
+            let servicesHTML = '';
+
+            // Prefer using the appState.selectedServices (this is populated when users pick via search/suggestions)
+            const selected = appState.billingData.selectedServices || [];
+            selected.forEach(s => {
+                const usedPrice = (s.overridePrice != null) ? s.overridePrice : (s.price != null ? s.price : 0);
+                subtotal += Number(usedPrice || 0);
+                // render name, category and price with a small remove button
+                const catHtml = s.category ? `<div style="font-size:0.8rem; color:var(--text-secondary);">${s.category}</div>` : '';
+                const vipTag = s.overridePrice != null ? ` <strong style=\\"color:var(--accent);\\">(VIP)</strong>` : '';
+                // If VIP mode is enabled, show an inline override input
+                const overrideInput = appState.vipMode ? `
+                    <input type="number" class="vip-override-input" data-id="${s.id}" value="${s.overridePrice != null ? s.overridePrice : ''}" placeholder="Override price..." style="width:100px; padding:0.25rem; font-size:0.85rem; border:1px solid var(--border); border-radius:0.25rem;" />
+                ` : '';
+                servicesHTML += `
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem; padding:0.5rem; background:var(--background); border-radius:0.25rem;">
+                        <div style="flex:1;">
+                            <div>• ${s.name}${vipTag}</div>
+                            ${catHtml}
+                        </div>
+                        <div style="text-align:right; display:flex; flex-direction:column; align-items:flex-end; gap:0.25rem;">
+                            <div style="font-weight:700">${formatCurrency(usedPrice)}</div>
+                            ${overrideInput}
+                            <button class="remove-selected" data-id="${s.id}" style="background:none; border:none; color:var(--error); cursor:pointer; font-size:0.95rem;">× Remove</button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            // Backwards compatibility: if no selected services in appState, fall back to checked boxes
+            if ((!selected || selected.length === 0) && document.querySelectorAll('.service-checkbox:checked').length) {
+                document.querySelectorAll('.service-checkbox:checked').forEach(checkbox => {
+                    const id = checkbox.dataset.id;
+                    const name = checkbox.dataset.name;
+                    let originalPrice = parseFloat(checkbox.dataset.price);
+                    if (isNaN(originalPrice)) originalPrice = 0;
+                    const inv = inventory.find(i => String(i.id) === String(id));
+                    const category = inv ? inv.category : '';
+                    subtotal += originalPrice;
+                    servicesHTML += `<div style="display:flex; justify-content:space-between; margin-bottom:0.5rem;"><span>• ${name}</span><span>${formatCurrency(originalPrice)}</span></div>`;
+                    appState.billingData.selectedServices.push({ id, name, category, price: originalPrice, originalPrice });
+                });
+            }
+
+            const discount = parseFloat(document.getElementById('discount')?.value || 0);
+            const finalDiscount = calculateDiscount(subtotal, discount);
+            const total = subtotal - finalDiscount;
+
+            appState.billingData.discount = finalDiscount;
+            appState.billingData.total = total;
+
+            if (servicesHTML) {
+                selectedServicesListEl.innerHTML = servicesHTML + (selected.length ? `<div style="margin-top:0.5rem;"><small style="color:var(--text-secondary);">Click a selected item below to remove it.</small></div>` : '');
+            } else {
+                selectedServicesListEl.innerHTML = `<div style="color: var(--text-secondary); text-align: center;">No services selected yet.</div>`;
+            }
+
+            document.getElementById('subtotal').textContent = formatCurrency(subtotal);
+            document.getElementById('discountDisplay').textContent = formatCurrency(finalDiscount);
+            document.getElementById('totalAmount').textContent = formatCurrency(total);
+            if (document.getElementById('receiptTotal')) document.getElementById('receiptTotal').textContent = formatCurrency(total);
+            if (document.getElementById('receiptServices')) document.getElementById('receiptServices').innerHTML = (appState.billingData.selectedServices || []).map(s => `<div style="display:flex; justify-content:space-between;"><span>• ${s.name}${s.overridePrice != null ? ' (VIP)' : ''}</span><span>${formatCurrency(s.overridePrice != null ? s.overridePrice : s.price)}</span></div>`).join('');
+        }
+
+        function selectPaymentMethod(method) {
+            appState.billingData.paymentMethod = method;
+            renderApp();
+        }
+
+        function selectPaymentStatus(status) {
+            appState.billingData.paymentStatus = status;
+            renderApp();
+        }
+
+        // Toggle VIP form mode: allows manual override of service prices
+        function toggleVIPMode() {
+            appState.vipMode = !appState.vipMode;
+            // Re-render billing so override inputs appear/disappear
+            renderApp();
+        }
+
+        function updateInstallmentPayment(amount) {
+            const paidAmount = parseFloat(amount) || 0;
+            appState.billingData.amountPaid = paidAmount;
+            appState.billingData.balance = Math.max(0, appState.billingData.total - paidAmount);
+            // We only need to re-render the billing part, but full render is simpler here
+            renderApp();
+        }
+
+        function printReceipt(order) {
+            // Support services stored either as array of names or array of {name, price, category} objects
+            const serviceDetails = order.services.map(s => {
+                if (typeof s === 'string') {
+                    const service = inventory.find(inv => inv.name === s);
+                    return { name: s, price: service ? service.price : 0, category: service ? service.category : '' };
+                }
+                // object with name, price, category
+                return { name: s.name || 'Unnamed', price: typeof s.price === 'number' ? s.price : 0, category: s.category || '' };
+            });
+            const subtotal = serviceDetails.reduce((sum, s) => sum + s.price, 0);
+
+            const receiptHTML = `
+                <html>
+                <head>
+                    <title>Receipt - ${order.pid}</title>
+                    <style>
+                        body { font-family: 'Segoe UI', sans-serif; margin: 0; color: #333; }
+                        .receipt-container { width: 320px; margin: 0 auto; padding: 20px; background-color: #fff; }
+                        .receipt-header { text-align: center; border-bottom: 1px dashed #999; padding-bottom: 10px; margin-bottom: 15px; }
+                        .receipt-header .logo { font-size: 2.5rem; margin-bottom: 5px; }
+                        .receipt-header h2 { margin: 0; font-size: 1.4rem; color: #0e4a7c; }
+                        .receipt-header .address { font-size: 0.8rem; color: #555; margin-top: 5px; line-height: 1.4; }
+                        .receipt-header .receipt-title { margin: 5px 0 0 0; color: #555; }
+                        .details div, .services div, .total div { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 0.9rem; }
+                        .services { border-top: 1px dashed #999; border-bottom: 1px dashed #999; padding: 10px 0; margin: 15px 0; }
+                        .total .grand-total { font-weight: bold; font-size: 1.1rem; border-top: 1px solid #333; padding-top: 10px; margin-top: 5px; }
+                        .footer { text-align: center; margin-top: 20px; font-size: 0.8rem; color: #777; }
+                    </style>
+                </head>
+                <body>
+                    <div class="receipt-container">
+                        <div class="receipt-header">
+                            <div class="logo">${appState.companyProfile.logo}</div>
+                            <h2>${appState.companyProfile.name}</h2>
+                            <div class="address">
+                                <p>${appState.companyProfile.address}</p>
+                                <p>${appState.companyProfile.email} | ${appState.companyProfile.contact}</p>
+                            </div>
+                            <p class="receipt-title">Official Receipt</p>
+                        </div>
+                        <div class="details">
+                            <div><span>Patient:</span> <strong>${order.patientName}</strong></div>
+                            <div><span>PID:</span> <strong>${order.pid}</strong></div>
+                            <div><span>Date:</span> <span>${new Date(order.date).toLocaleDateString()} ${order.time}</span></div>
+                        </div>
+                        <div class="services">
+                            ${serviceDetails.map(s => `
+                                <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px;">
+                                    <div>
+                                        <div>${s.name}</div>
+                                        ${s.category ? `<div style="font-size:0.8rem; color:#666;">${s.category}</div>` : ''}
+                                    </div>
+                                    <div>${formatCurrency(s.price)}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div class="total">
+                            <div><span>Subtotal:</span> <span>${formatCurrency(subtotal)}</span></div>
+                            <div><span>Discount:</span> <span>-${formatCurrency(subtotal - order.total)}</span></div>
+                            <div class="grand-total"><span>Total Due:</span> <span>${formatCurrency(order.total)}</span></div>
+                            ${order.paymentStatus === 'installment' ? `
+                                <div><span>Amount Paid:</span> <span>${formatCurrency(order.amountPaid)}</span></div>
+                                <div class="grand-total" style="color: #ef4444;"><span>Balance Due:</span> <span>${formatCurrency(order.balance)}</span></div>
+                            ` : `
+                                <div class="grand-total"><span>Amount Paid:</span> <span>${formatCurrency(order.total)}</span></div>
+                            `}
+                        </div>
+                        <div class="footer"><p>Payment Status: ${order.paymentStatus === 'full' ? 'PAID IN FULL' : 'INSTALLMENT'}</p></div>
+                        <div class="footer"><p>Thank you for choosing Silhouette Diagnostics.</p></div>
+                    </div>
+                </body></html>`;
+
+            const printFrame = document.createElement('iframe');
+            printFrame.style.display = 'none';
+            document.body.appendChild(printFrame);
+            printFrame.contentDocument.write(receiptHTML);
+            printFrame.contentWindow.print();
+            document.body.removeChild(printFrame);
+        }
+
+        // --- Helper functions for new service selection flow ---
+        function addServiceById(id) {
+            if (!id) return;
+            const svc = inventory.find(i => String(i.id) === String(id));
+            if (!svc) return;
+            appState.billingData.selectedServices = appState.billingData.selectedServices || [];
+            const exists = appState.billingData.selectedServices.find(s => String(s.id) === String(id));
+            if (exists) return; // already added
+            appState.billingData.selectedServices.push({ id: svc.id, name: svc.name, category: svc.category, price: svc.price ?? 0, originalPrice: svc.price ?? 0, overridePrice: null });
+            updateBillingCalculations();
+            renderApp();
+        }
+
+        function removeServiceById(id) {
+            if (!id) return;
+            appState.billingData.selectedServices = (appState.billingData.selectedServices || []).filter(s => String(s.id) !== String(id));
+            // uncheck any checkboxes for compatibility
+            const cb = document.querySelector(`.service-checkbox[data-id="${id}"]`);
+            if (cb) cb.checked = false;
+            updateBillingCalculations();
+        }
+
+        function openCategoryList() {
+            // show all categories as suggestions
+            renderServiceSuggestions('');
+        }
+
+        function renderServiceSuggestions(query, opts = {}) {
+            const container = document.getElementById('serviceSuggestions');
+            if (!container) return;
+            const q = (query || '').trim().toLowerCase();
+
+            // If expandCategory option provided and query matches a category, show that category items
+            if (opts.expandCategory && q) {
+                const cat = Object.keys(inventory.reduce((acc, s) => (acc[s.category] = true, acc), {})).find(c => c.toLowerCase().includes(q));
+                if (cat) {
+                    const list = inventory.filter(i => i.category === cat).map(i => `<div class="suggestion-item" data-id="${i.id}" style="padding:0.5rem; cursor:pointer;">${i.name} — ${formatCurrency(i.price)}</div>`).join('');
+                    container.innerHTML = `<div style="font-weight:700; margin-bottom:0.25rem;">${cat}</div>${list}`;
+                    return;
+                }
+            }
+
+            // If empty query, show categories list
+            if (!q) {
+                const cats = [...new Set(inventory.map(i => i.category))];
+                container.innerHTML = cats.map(c => `<button class="suggestion-item" data-category="${c}" style="margin:0.25rem; padding:0.35rem 0.6rem;">${c}</button>`).join('');
+                return;
+            }
+
+            // Search services and categories
+            const matches = inventory.filter(i => i.name.toLowerCase().includes(q) || i.category.toLowerCase().includes(q));
+            if (matches.length === 0) {
+                container.innerHTML = `<div style="color:var(--text-secondary);">No matches for "${query}"</div>`;
+                return;
+            }
+
+            // Group matches by category
+            const groups = matches.reduce((acc, s) => { if (!acc[s.category]) acc[s.category] = []; acc[s.category].push(s); return acc; }, {});
+            container.innerHTML = Object.keys(groups).map(cat => `<div style="margin-bottom:0.5rem;"><div style="font-weight:700;">${cat}</div>${groups[cat].map(i => `<div class="suggestion-item" data-id="${i.id}" style="padding:0.35rem; cursor:pointer;">${i.name} — ${formatCurrency(i.price)}</div>`).join('')}</div>`).join('');
+        }
+
+        function submitBilling() {
+            if (appState.billingData.selectedServices.length === 0) {
+                alert('Please select at least one service');
+                return;
+            }
+
+            if (appState.billingData.paymentStatus === 'installment' && appState.billingData.amountPaid <= 0) {
+                alert('For installment payments, please enter the amount paid.');
+                return;
+            }
+
+            const newOrder = {
+                id: orders.length + 1,
+                patientName: appState.billingData.patientName,
+                pid: appState.billingData.pid,
+                // store services as objects with name, category and price so VIP overrides are preserved
+                services: appState.billingData.selectedServices.map(s => ({ name: s.name, category: s.category || (inventory.find(i => i.name === s.name) || {}).category || '', price: (s.overridePrice != null ? s.overridePrice : s.price) })),
+                total: appState.billingData.total,
+                status: appState.billingData.paymentStatus === 'full' ? 'PAID' : 'PENDING',
+                referredBy: appState.billingData.referredBy || 'Not Specified',
+                date: new Date(), // Store as a full Date object
+                time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }), // Time can remain a string
+                staffName: appState.billingData.staffName,
+                paymentMethod: appState.billingData.paymentMethod,
+                paymentStatus: appState.billingData.paymentStatus,
+                amountPaid: appState.billingData.paymentStatus === 'full' ? appState.billingData.total : appState.billingData.amountPaid,
+                balance: appState.billingData.paymentStatus === 'full' ? 0 : appState.billingData.balance
+            };
+
+            orders.push(newOrder);
+            saveData(); // Save after adding a new order
+            logAction('CREATE_BILLING', `Created new bill for '${newOrder.patientName}' (PID: ${newOrder.pid}) with a total of ${formatCurrency(newOrder.total)}.`);
+            alert('Billing completed successfully! The receipt will now be printed.');
+            printReceipt(newOrder);
+
+            appState.billingData = {
+                patientName: '', pid: '', contact: '', referredBy: '', staffName: '',
+                selectedServices: [], discount: 0, total: 0, paymentMethod: 'cash', paymentStatus: 'full',
+                amountPaid: 0, balance: 0
+            };
+            appState.billingStep = 1;
+            navigateTo('dashboard');
+        }
+
+        function resetAddForms() {
+            appState.showAddPRForm = false;
+            appState.showAddInventoryForm = false;
+            appState.showAddStaffForm = false;
+            appState.editingPRId = null;
+            appState.editingInventoryId = null;
+        }
+
+        function toggleAddPRForm() {
+            appState.showAddPRForm = !appState.showAddPRForm;
+            renderApp();
+        }
+
+        function addNewPR() {
+            const name = document.getElementById('newPRName').value.trim();
+            const phone = document.getElementById('newPRPhone').value.trim();
+
+            if (!name || !phone) {
+                alert('Please fill in both PR name and phone number.');
+                return;
+            }
+
+            const newId = prList.length > 0 ? Math.max(...prList.map(p => p.id)) + 1 : 1;
+            prList.push({
+                id: newId,
+                name,
+                phone
+            });
+
+            saveData(); // Save the updated PR list
+            logAction('CREATE_PR', `Added new PR: '${name}' (${phone}).`);
+            appState.showAddPRForm = false;
+            renderApp();
+        }
+
+        function toggleAddInventoryForm() {
+            appState.showAddInventoryForm = !appState.showAddInventoryForm;
+            renderApp();
+        }
+
+        function addNewInventoryItem() {
+            const name = document.getElementById('newInventoryName').value;
+            const category = document.getElementById('newInventoryCategory').value;
+            const price = parseFloat(document.getElementById('newInventoryPrice').value);
+
+            if (!name || !category || isNaN(price) || price <= 0) {
+                alert('Please fill all fields with valid data for the new item.');
+                return;
+            }
+
+            inventory.push({ id: inventory.length + 1, name, category, price });
+            saveData(); // Save the updated inventory
+
+            logAction('CREATE_INVENTORY', `Added new test: '${name}' with price ${formatCurrency(price)}.`);
+            appState.showAddInventoryForm = false;
+            renderApp();
+        }
+
+        function toggleAddStaffForm() {
+            appState.showAddStaffForm = !appState.showAddStaffForm;
+            renderApp();
+        }
+
+        function addNewStaff() {
+            const fullName = document.getElementById('newStaffFullName').value.trim();
+            const username = document.getElementById('newStaffUsername').value.trim().toLowerCase();
+            const password = document.getElementById('newStaffPassword').value;
+
+            if (!fullName || !username || !password) {
+                alert('Please fill all fields for the new staff member.');
+                return;
+            }
+
+            if (username.length < 3) {
+                alert('Username must be at least 3 characters.');
+                return;
+            }
+
+            if (password.length < 6) {
+                alert('Password must be at least 6 characters.');
+                return;
+            }
+
+            // Check if username already exists
+            if (users.find(u => u.username === username)) {
+                alert('This username already exists. Please choose a different one.');
+                return;
+            }
+
+            // Add new staff user
+            users.push({
+                username,
+                password,
+                role: 'Staff',
+                fullName
+            });
+
+            saveData(); // Save the new user
+            logAction('CREATE_STAFF', `Added new staff member: '${fullName}' (Username: ${username}).`);
+            appState.showAddStaffForm = false;
+            renderApp();
+        }
+
+        function deleteStaff(username) {
+            const userToDelete = users.find(u => u.username === username);
+            if (!userToDelete) return;
+
+            if (confirm(`Are you sure you want to delete "${userToDelete.fullName}"? This action cannot be undone.`)) {
+                users = users.filter(u => u.username !== username);
+                saveData(); // Save the updated user list
+                logAction('DELETE_STAFF', `Deleted staff: '${userToDelete.fullName}' (Username: ${username}).`);
+                renderApp();
+            }
+        }
+
+        // Generic function to toggle edit mode for an item
+        function toggleEdit(type, id) {
+            if (type === 'pr') {
+                appState.editingPRId = id;
+                appState.editingInventoryId = null; // Ensure only one item is edited at a time
+            } else if (type === 'inventory') {
+                appState.editingInventoryId = id;
+                appState.editingPRId = null;
+            }
+            renderApp();
+        }
+
+        // Generic function to cancel an edit
+        function cancelEdit(type) {
+            if (type === 'pr') appState.editingPRId = null;
+            if (type === 'inventory') appState.editingInventoryId = null;
+            renderApp();
+        }
+
+        function savePREdit(id) {
+            const pr = prList.find(p => p.id === id);
+            if (!pr) return;
+
+            const oldDetails = `Name: ${pr.name}, Phone: ${pr.phone}`;
+            pr.name = document.getElementById(`editPRName-${id}`).value.trim();
+            pr.phone = document.getElementById(`editPRPhone-${id}`).value.trim();
+
+            saveData(); // Save changes
+            logAction('EDIT_PR', `Edited PR #${id}. FROM: [${oldDetails}] TO: [Name: ${pr.name}, Phone: ${pr.phone}].`);
+            appState.editingPRId = null;
+            renderApp();
+        }
+
+        function deletePR(id) {
+            if (confirm('Are you sure you want to delete this PR?')) {
+                const index = prList.findIndex(p => p.id === id);
+                const prToDelete = prList[index];
+                if (index > -1) {
+                    prList.splice(index, 1);
+                }
+                saveData(); // Save changes
+                logAction('DELETE_PR', `Deleted PR: '${prToDelete.name}' (ID: ${prToDelete.id}).`);
+                renderApp();
+            }
+        }
+
+        function saveInventoryEdit(id) {
+            const item = inventory.find(i => i.id === id);
+            if (!item) return;
+
+            const oldDetails = `Name: ${item.name}, Price: ${formatCurrency(item.price)}`;
+            item.name = document.getElementById(`editInventoryName-${id}`).value;
+            item.category = document.getElementById(`editInventoryCategory-${id}`).value;
+            item.price = parseFloat(document.getElementById(`editInventoryPrice-${id}`).value);
+
+            saveData(); // Save changes
+            logAction('EDIT_INVENTORY', `Edited Test #${id}. FROM: [${oldDetails}] TO: [Name: ${item.name}, Price: ${formatCurrency(item.price)}].`);
+            appState.editingInventoryId = null;
+            renderApp();
+        }
+
+        function deleteInventoryItem(id) {
+            if (confirm('Are you sure you want to delete this inventory item?')) {
+                const index = inventory.findIndex(i => i.id === id);
+                const itemToDelete = inventory[index];
+                if (index > -1) {
+                    inventory.splice(index, 1);
+                }
+                saveData(); // Save changes
+                logAction('DELETE_INVENTORY', `Deleted test: '${itemToDelete.name}' (ID: ${itemToDelete.id}).`);
+                renderApp();
+            }
+        }
+
+        function updateFilterType(type) {
+            appState.recordFilters.filterType = type;
+            appState.recordFilters.date = '';
+            appState.recordFilters.month = '';
+            appState.recordFilters.year = '';
+            appState.recordFilters.time = '';
+            renderApp();
+        }
+
+        function updateFilter(key, value) {
+            appState.recordFilters[key] = value;
+            renderApp();
+        }
+
+        function clearFilters() {
+            appState.recordFilters = { date: '', month: '', year: '', time: '', filterType: 'all', searchQuery: '' };
+            renderApp();
+        }
+
+        function exportData() {
+            if (appState.currentUser.role !== 'Admin') {
+                alert('Only admins can export data');
+                return;
+            }
+            exportToCSV();
+        }
+
+        function viewOrderDetails(orderId) {
+            appState.viewingOrderId = orderId;
+            renderApp();
+        }
+
+        function closeOrderDetails() {
+            appState.viewingOrderId = null;
+            renderApp();
+        }
+
+        function markAsFullyPaid(orderId) {
+            const order = orders.find(o => o.id === orderId);
+            if (order && confirm(`Are you sure you want to mark the order for ${order.patientName} (PID: ${order.pid}) as fully paid?`)) {
+                order.status = 'PAID';
+                order.paymentStatus = 'full';
+                order.balance = 0;
+                order.amountPaid = order.total;
+                saveData(); // Save the updated order
+                logAction('UPDATE_PAYMENT', `Marked order #${order.id} for '${order.patientName}' as fully paid.`);
+                printReceipt(order); // Print receipt after updating
+                renderApp(); // Re-render to update the modal view
+                alert('Payment updated successfully! The receipt will now be printed.');
+                printReceipt(order);
+                renderApp(); // Re-render to update the modal and the main records table
+            }
+        }
+
+        function saveCompanyProfile() {
+            const name = document.getElementById('companyName').value;
+            const address = document.getElementById('companyAddress').value;
+            const email = document.getElementById('companyEmail').value;
+            const contact = document.getElementById('companyContact').value;
+            const logo = document.getElementById('companyLogo').value;
+
+            if (!name || !address || !email || !contact) {
+                alert('Please fill all company profile fields.');
+                return;
+            }
+
+            appState.companyProfile = { name, address, email, contact, logo };
+            localStorage.setItem('companyProfile', JSON.stringify(appState.companyProfile));
+            saveData(); // Save updated profile to the main data file as well
+            logAction('UPDATE_PROFILE', `Updated company profile information.`);
+            alert('Company profile updated successfully!');
+            renderApp();
+        }
+        
+        function renderMainContent() {
+            let content = '';
+
+            if (appState.currentView === 'login') {
+                content = renderLogin();
+            } else if (appState.currentView === 'dashboard') {
+                content = renderDashboard();
+            } else if (appState.currentView === 'billing') {
+                content = renderBilling();
+            } else if (appState.currentView === 'inventory') {
+                content = renderInventory();
+            } else if (appState.currentView === 'pr-management') {
+                content = renderPRManagement();
+            } else if (appState.currentView === 'staff-management') {
+                content = renderStaffManagement();
+            } else if (appState.currentView === 'analytics') {
+                content = renderAnalytics();
+            } else if (appState.currentView === 'records') {
+                content = renderRecords();
+            } else if (appState.currentView === 'settings') {
+                content = renderSettings(); // Added settings view rendering
+            } else if (appState.currentView === 'history') {
+                content = renderHistory();
+            }
+
+            return content;
+        }
+
+        function renderApp() {
+            const isLoggedIn = appState.currentUser !== null;
+            const appContainer = document.getElementById('app');
+
+            if (isLoggedIn) {
+                appContainer.innerHTML = `
+                    ${renderSidebar()}
+                    <div class="main-container ${appState.sidebarCollapsed ? 'sidebar-collapsed' : ''}">
+                        ${renderHeader()}
+                        <div class="main-content">
+                            ${renderOrderDetailsModal()}
+                            ${renderMainContent()}
+                        </div>
+                    </div>
+                `;
+            } else {
+                appContainer.innerHTML = renderMainContent();
+            }
+
+            if (isLoggedIn) {
+                updateHeaderDateTime();
+                setInterval(updateHeaderDateTime, 1000);
+            }
+
+            // Always re-attach event listeners after a render
+            attachEventListeners();
+        }
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            loadPreferences();
+            await loadData();
+            renderApp();
+        });
+    </script>
+</body>
+</html>

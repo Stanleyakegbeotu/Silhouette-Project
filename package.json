@@ -1,0 +1,40 @@
+{
+  "name": "silhouette",
+  "version": "1.0.0",
+  "description": "Silhouette Diagnostic Consultants Billing Application",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "author": "Silhouette Diagnostic Consultants",
+  "devDependencies": {
+    "electron": "^38.0.0",
+    "electron-builder": "^26.3.0"
+  },
+  "build": {
+    "appId": "com.silhouettediagnostic.silhouette",
+    "productName": "silhouette",
+    "files": [
+      "main.js",
+      "index.html",
+      "preload.js",
+      "assets/**/*"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.png"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "assets/icon.png"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "assets/icon.png"
+    }
+  },
+  "dependencies": {
+    "electron-store": "^11.0.2"
+  }
+}
