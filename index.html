@@ -880,10 +880,10 @@
             editingInventoryId: null, // To track which inventory item is being edited
             companyProfile: {
                 name: 'Silhouette Diagnostic Consultants',
-                address: '123 Health St, Wellness City, 10001',
+                address: 'No.12 Kudang street off monrovia street wuse2, opp Banex plaza, Abuja, Niheria',
                 email: 'contact@silhouettediagnostics.com',
                 contact: '+234-801-234-5678',
-                logo: '🏥' // Default logo/icon
+                logo: 'company icon.png' // Default logo/icon
             },
             theme: 'light', // light or dark
             colorTheme: 'blue', // blue, skyblue, gray, brown, green, purple
@@ -1240,7 +1240,7 @@
         ];
 
         // Inventory populated from provided master list (grouped by category)
-        const inventory = [
+        let inventory = [
             { id: 1, name: 'FULL BLOOD COUNT', category: 'HEAMATOLOGY', price: 10000 },
             { id: 2, name: 'ERYTHROCYTE SEDIMENTATION RATE (ESR)', category: 'HEAMATOLOGY', price: 7000 },
             { id: 3, name: 'HB GENOTYPE', category: 'HEAMATOLOGY', price: 10000 },
@@ -1842,7 +1842,7 @@ async function loadData() {
                     <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);">
                         <div class="card" style="width: 100%; max-width: 500px; transform: scale(1); animation: popIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);">
                             <div style="text-align: center; margin-bottom: 2rem;">
-                                <div style="font-size: 3rem; margin-bottom: 1rem;">${appState.companyProfile.logo}</div>
+                            <div style="margin-bottom: 1rem;"><img src="${appState.companyProfile.logo}" alt="Company Logo" style="height: 60px; width: auto; margin: 0 auto;"/></div>
                                 <h1 style="font-size: 1.5rem; font-weight: 700; color: var(--primary);">${appState.companyProfile.name}</h1>
                                 <p style="color: var(--text-secondary); font-size: 0.875rem;">Initial Setup - Create Admin Account</p>
                             </div>
@@ -1884,7 +1884,7 @@ async function loadData() {
                 <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);">
                     <div class="card" style="width: 100%; max-width: 400px; transform: scale(1); animation: popIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);">
                         <div style="text-align: center; margin-bottom: 2rem;">
-                            <div style="font-size: 3rem; margin-bottom: 1rem;">${appState.companyProfile.logo}</div>
+                            <div style="margin-bottom: 1rem;"><img src="${appState.companyProfile.logo}" alt="Company Logo" style="height: 60px; width: auto; margin: 0 auto;"/></div>
                             <h1 style="font-size: 1.5rem; font-weight: 700; color: var(--primary);">${appState.companyProfile.name}</h1>
                             <p style="color: var(--text-secondary); font-size: 0.875rem;">Diagnostic Center Management</p>
                         </div>
@@ -2161,7 +2161,7 @@ async function loadData() {
                                 <h4 style="font-weight: 600; margin-bottom: 1rem;">Receipt Preview</h4>
                                 <div style="border: 1px solid var(--border); padding: 1.5rem; background-color: white; border-radius: 0.5rem;">
                                     <div style="text-align: center; margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 1rem;">
-                                        <div style="font-size: 2rem; margin-bottom: 0.5rem;">${appState.companyProfile.logo}</div>
+                                        <div style="margin-bottom: 0.5rem;"><img src="${appState.companyProfile.logo}" alt="Company Logo" style="height: 40px; width: auto; margin: 0 auto;"/></div>
                                         <div style="font-size: 1.25rem; font-weight: 700; color: var(--text-primary);">${appState.companyProfile.name}</div>
                                         <div style="font-size: 0.8rem; color: var(--text-secondary);">
                                             <p>${appState.companyProfile.address}</p>
@@ -2816,21 +2816,6 @@ async function loadData() {
                 <div class="animate-slide-up">
                     <h1 style="font-size: 2rem; font-weight: 700; margin-bottom: 2rem; color: var(--text-primary);">Settings</h1>
                     
-                    ${isAdmin ? `
-                    <div class="settings-card">
-                        <div class="settings-card-title">Data Management</div>
-                        <p style="color: var(--text-secondary); margin-bottom: 1.5rem; font-size: 0.9rem;">Create a backup of your application data or restore from a previous backup file. It is recommended to create backups regularly.</p>
-                        <div style="display: flex; gap: 1rem;">
-                            <button onclick="handleBackup()" class="btn-primary">
-                                💾 Backup Data
-                            </button>
-                            <button onclick="handleRestore()" class="btn-secondary" style="color: var(--error); border-color: var(--error);">
-                                🔄 Restore from Backup
-                            </button>
-                        </div>
-                    </div>
-                    ` : ''}
-
                     <div class="settings-card">
                         <div class="settings-card-title">Theme Mode</div>
                         <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.9rem;">Choose between light and dark mode for your preferred viewing experience</p>
@@ -2863,10 +2848,22 @@ async function loadData() {
                     ${isAdmin ? companyProfileSection : ''}
 
                     <div class="settings-card">
-                        <div class="settings-card-title">About</div>
+                        <div class="settings-card-title">About & Data Management</div>
                         <p style="color: var(--text-secondary); margin-bottom: 0.5rem;"><strong>Application:</strong> Silhouette Diagnostic Consultants</p>
                         <p style="color: var(--text-secondary); margin-bottom: 0.5rem;"><strong>Version:</strong> 2.0</p>
-                        <p style="color: var(--text-secondary);"><strong>Status:</strong> Active and Running</p>
+                        <p style="color: var(--text-secondary); margin-bottom: 0.5rem;"><strong>Status:</strong> Active and Running</p>
+                        <p style="color: var(--text-secondary); margin-bottom: 1.5rem;"><strong>DEVELOPER:</strong> Stanley Akegbeotu</p>
+
+                        ${isAdmin ? `
+                            <div style="border-top: 1px solid var(--border); padding-top: 1.5rem; margin-top: 1.5rem;">
+                                <h4 style="font-weight: 600; margin-bottom: 1rem;">Data Backup & Restore</h4>
+                                <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.9rem;">Create a backup of all application data or restore from a previous backup file.</p>
+                                <div style="display: flex; gap: 1rem;">
+                                    <button onclick="handleBackup()" class="btn-primary">📤 Create Backup</button>
+                                    <button onclick="handleRestore()" class="btn-secondary" style="color: var(--error);">📥 Restore from Backup</button>
+                                </div>
+                            </div>
+                        ` : ''}
                     </div>
                 </div>
             `;
@@ -3097,39 +3094,26 @@ async function loadData() {
         }
 
         function addNewPRAgent() {
-    const query = document.getElementById('referredBySearch').value.trim();
-    if (!query) {
-        alert('Please enter a PR agent name');
-        return;
-    }
-
-    const phone = prompt(`Enter phone number for "${query}":`, '');
-    if (phone === null) return; // user cancelled
-
-    if (!phone.trim()) {
-        alert('Phone number is required');
-        return;
-    }
-
-    // Add to prList
-    const newId = (prList.length > 0 ? Math.max(...prList.map(p => p.id)) : 0) + 1;
-    prList.push({ id: newId, name: query, phone: phone.trim() });
-
-    // Update billing reference
-    appState.billingData.referredBy = query;
-
-    // UI updates
-    document.getElementById('referredBySearch').value = query;
-    document.getElementById('prSuggestions').style.display = 'none';
-    document.getElementById('addPRAgentContainer').style.display = 'none';
-
-    // Log after state changes
-    logAction('ADD_PR_AGENT', `New PR agent added: ${query} (${phone})`);
-
-    // Save everything persistently
-    autoSave();
-}
-
+            const query = document.getElementById('referredBySearch').value.trim();
+            if (!query) {
+                alert('Please enter a PR agent name');
+                return;
+            }
+            const phone = prompt(`Enter phone number for "${query}":`, '');
+            if (phone === null) return; // user cancelled
+            if (!phone.trim()) {
+                alert('Phone number is required');
+                return;
+            }
+            // Add to prList
+            const newId = (prList.length > 0 ? Math.max(...prList.map(p => p.id)) : 0) + 1;
+            prList.push({ id: newId, name: query, phone: phone.trim() });
+            appState.billingData.referredBy = query;
+            document.getElementById('referredBySearch').value = query;
+            document.getElementById('prSuggestions').style.display = 'none';
+            document.getElementById('addPRAgentContainer').style.display = 'none';
+            logAction('ADD_PR_AGENT', `New PR agent added: ${query} (${phone})`);
+        }
 
         function handleLogin() {
             const username = document.getElementById('loginUsername').value.trim();
@@ -3152,54 +3136,42 @@ async function loadData() {
             }
         }
 
-       function handleFirstTimeSetup() {
-    const setupName = document.getElementById('setupFullName').value.trim();
-    const setupUsername = document.getElementById('setupUsername').value.trim();
-    const setupPassword = document.getElementById('setupPassword').value;
-    const setupPasswordConfirm = document.getElementById('setupPasswordConfirm').value;
+        function handleFirstTimeSetup() {
+            const setupName = document.getElementById('setupFullName').value.trim();
+            const setupUsername = document.getElementById('setupUsername').value.trim();
+            const setupPassword = document.getElementById('setupPassword').value;
+            const setupPasswordConfirm = document.getElementById('setupPasswordConfirm').value;
 
-    if (!setupName || !setupUsername || !setupPassword || !setupPasswordConfirm) {
-        alert('Please fill in all fields');
-        return;
-    }
+            if (!setupName || !setupUsername || !setupPassword || !setupPasswordConfirm) {
+                alert('Please fill in all fields');
+                return;
+            }
 
-    if (setupPassword !== setupPasswordConfirm) {
-        alert('Passwords do not match');
-        return;
-    }
+            if (setupPassword !== setupPasswordConfirm) {
+                alert('Passwords do not match');
+                return;
+            }
 
-    if (setupPassword.length < 6) {
-        alert('Password must be at least 6 characters');
-        return;
-    }
+            if (setupPassword.length < 6) {
+                alert('Password must be at least 6 characters');
+                return;
+            }
 
-    // Create first admin user
-    users.push({
-        username: setupUsername,
-        password: setupPassword,
-        role: 'Admin',
-        fullName: setupName
-    });
+            // Create first admin user
+            users.push({
+                username: setupUsername,
+                password: setupPassword,
+                role: 'Admin',
+                fullName: setupName
+            });
 
-    // Set user BEFORE logging the action
-    appState.currentUser = {
-        username: setupUsername,
-        role: 'Admin',
-        fullName: setupName
-    };
-
-    // Log setup event
-    logAction('SETUP', `First admin user created: ${setupName} (${setupUsername})`);
-
-    // Move to dashboard
-    appState.currentView = 'dashboard';
-
-    // FINAL Save — after all state updates
-    autoSave();
-
-    renderApp();
-}
-
+            autoSave(); // Save the new user
+            // Set user BEFORE logging action
+            appState.currentUser = { username: setupUsername, role: 'Admin', fullName: setupName };
+            logAction('SETUP', `First admin user created: ${setupName} (${setupUsername})`);
+            appState.currentView = 'dashboard';
+            renderApp();
+        }
 
         function logout() {
             logAction('LOGOUT', `User '${appState.currentUser.fullName}' logged out.`);
@@ -3367,7 +3339,7 @@ async function loadData() {
                 <body>
                     <div class="receipt-container">
                         <div class="receipt-header">
-                            <div class="logo">${appState.companyProfile.logo}</div>
+                            <div class="logo"><img src="${appState.companyProfile.logo}" alt="Company Logo" style="height: 50px; width: auto; margin: 0 auto;"/></div>
                             <h2>${appState.companyProfile.name}</h2>
                             <div class="address">
                                 <p>${appState.companyProfile.address}</p>
@@ -3476,102 +3448,49 @@ async function loadData() {
             container.innerHTML = Object.keys(groups).map(cat => `<div style="margin-bottom:0.5rem;"><div style="font-weight:700;">${cat}</div>${groups[cat].map(i => `<div class="suggestion-item" data-id="${i.id}" style="padding:0.35rem; cursor:pointer;">${i.name} — ${formatCurrency(i.price)}</div>`).join('')}</div>`).join('');
         }
 
-       function submitBilling() {
-    if (appState.billingData.selectedServices.length === 0) {
-        alert('Please select at least one service');
-        return;
-    }
+        function submitBilling() {
+            if (appState.billingData.selectedServices.length === 0) {
+                alert('Please select at least one service');
+                return;
+            }
 
-    if (
-        appState.billingData.paymentStatus === 'installment' &&
-        appState.billingData.amountPaid <= 0
-    ) {
-        alert('For installment payments, please enter the amount paid.');
-        return;
-    }
+            if (appState.billingData.paymentStatus === 'installment' && appState.billingData.amountPaid <= 0) {
+                alert('For installment payments, please enter the amount paid.');
+                return;
+            }
 
-    const newOrder = {
-        id: orders.length + 1,
-        patientName: appState.billingData.patientName,
-        pid: appState.billingData.pid,
+            const newOrder = {
+                id: orders.length + 1,
+                patientName: appState.billingData.patientName,
+                pid: appState.billingData.pid,
+                // store services as objects with name, category and price so VIP overrides are preserved
+                services: appState.billingData.selectedServices.map(s => ({ name: s.name, category: s.category || (inventory.find(i => i.name === s.name) || {}).category || '', price: (s.overridePrice != null ? s.overridePrice : s.price) })),
+                total: appState.billingData.total,
+                status: appState.billingData.paymentStatus === 'full' ? 'PAID' : 'PENDING',
+                referredBy: appState.billingData.referredBy || 'Not Specified',
+                date: new Date(), // Store as a full Date object
+                time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }), // Time can remain a string
+                staffName: appState.billingData.staffName,
+                paymentMethod: appState.billingData.paymentMethod,
+                paymentStatus: appState.billingData.paymentStatus,
+                amountPaid: appState.billingData.paymentStatus === 'full' ? appState.billingData.total : appState.billingData.amountPaid,
+                balance: appState.billingData.paymentStatus === 'full' ? 0 : appState.billingData.balance
+            };
 
-        // Store service objects properly
-        services: appState.billingData.selectedServices.map(s => ({
-            name: s.name,
-            category:
-                s.category ||
-                (inventory.find(i => i.name === s.name) || {}).category ||
-                '',
-            price: s.overridePrice != null ? s.overridePrice : s.price
-        })),
+            orders.push(newOrder);
+            autoSave(); // Save after adding a new order
+            logAction('CREATE_BILLING', `Created new bill for '${newOrder.patientName}' (PID: ${newOrder.pid}) with a total of ${formatCurrency(newOrder.total)}.`);
+            alert('Billing completed successfully! The receipt will now be printed.');
+            printReceipt(newOrder);
 
-        total: appState.billingData.total,
-        status:
-            appState.billingData.paymentStatus === 'full'
-                ? 'PAID'
-                : 'PENDING',
-
-        referredBy: appState.billingData.referredBy || 'Not Specified',
-
-        date: new Date(), // Date saved as actual Date
-        time: new Date().toLocaleTimeString('en-IN', {
-            hour: '2-digit',
-            minute: '2-digit'
-        }),
-
-        staffName: appState.billingData.staffName,
-        paymentMethod: appState.billingData.paymentMethod,
-        paymentStatus: appState.billingData.paymentStatus,
-
-        amountPaid:
-            appState.billingData.paymentStatus === 'full'
-                ? appState.billingData.total
-                : appState.billingData.amountPaid,
-
-        balance:
-            appState.billingData.paymentStatus === 'full'
-                ? 0
-                : appState.billingData.balance
-    };
-
-    // Add order
-    orders.push(newOrder);
-
-    // Log action
-    logAction(
-        'CREATE_BILLING',
-        `Created new bill for '${newOrder.patientName}' (PID: ${newOrder.pid}) with a total of ${formatCurrency(newOrder.total)}.`
-    );
-
-    alert('Billing completed successfully! The receipt will now be printed.');
-    printReceipt(newOrder);
-
-    // Reset billing data AFTER the receipt is printed
-    appState.billingData = {
-        patientName: '',
-        pid: '',
-        contact: '',
-        referredBy: '',
-        staffName: '',
-        selectedServices: [],
-        discount: 0,
-        total: 0,
-        paymentMethod: 'cash',
-        paymentStatus: 'full',
-        amountPaid: 0,
-        balance: 0
-    };
-
-    // Reset billing step
-    appState.billingStep = 1;
-
-    // Navigate back to dashboard
-    navigateTo('dashboard');
-
-    // FINAL SAVE — captures everything updated above
-    autoSave();
-}
-
+            appState.billingData = {
+                patientName: '', pid: '', contact: '', referredBy: '', staffName: '',
+                selectedServices: [], discount: 0, total: 0, paymentMethod: 'cash', paymentStatus: 'full',
+                amountPaid: 0, balance: 0
+            };
+            appState.billingStep = 1;
+            navigateTo('dashboard');
+        }
 
         function resetAddForms() {
             appState.showAddPRForm = false;
@@ -3613,34 +3532,23 @@ async function loadData() {
             renderApp();
         }
 
-       function addNewInventoryItem() {
-    const name = document.getElementById('newInventoryName').value;
-    const category = document.getElementById('newInventoryCategory').value;
-    const price = parseFloat(document.getElementById('newInventoryPrice').value);
+        function addNewInventoryItem() {
+            const name = document.getElementById('newInventoryName').value;
+            const category = document.getElementById('newInventoryCategory').value;
+            const price = parseFloat(document.getElementById('newInventoryPrice').value);
 
-    if (!name || !category || isNaN(price) || price <= 0) {
-        alert('Please fill all fields with valid data for the new item.');
-        return;
-    }
+            if (!name || !category || isNaN(price) || price <= 0) {
+                alert('Please fill all fields with valid data for the new item.');
+                return;
+            }
 
-    // Add new inventory item
-    inventory.push({ id: inventory.length + 1, name, category, price });
+            inventory.push({ id: inventory.length + 1, name, category, price });
+            autoSave(); // Save the updated inventory
 
-    // Log after state update
-    logAction(
-        'CREATE_INVENTORY',
-        `Added new test: '${name}' with price ${formatCurrency(price)}.`
-    );
-
-    // UI updates
-    appState.showAddInventoryForm = false;
-
-    // Final save (ensures everything is included)
-    autoSave();
-
-    renderApp();
-}
-
+            logAction('CREATE_INVENTORY', `Added new test: '${name}' with price ${formatCurrency(price)}.`);
+            appState.showAddInventoryForm = false;
+            renderApp();
+        }
 
         function toggleAddStaffForm() {
             appState.showAddStaffForm = !appState.showAddStaffForm;
@@ -3827,36 +3735,52 @@ async function loadData() {
             }
         }
 
-       function saveCompanyProfile() {
-    const name = document.getElementById('companyName').value;
-    const address = document.getElementById('companyAddress').value;
-    const email = document.getElementById('companyEmail').value;
-    const contact = document.getElementById('companyContact').value;
-    const logo = document.getElementById('companyLogo').value;
+        function saveCompanyProfile() {
+            const name = document.getElementById('companyName').value;
+            const address = document.getElementById('companyAddress').value;
+            const email = document.getElementById('companyEmail').value;
+            const contact = document.getElementById('companyContact').value;
+            const logo = document.getElementById('companyLogo').value;
 
-    if (!name || !address || !email || !contact) {
-        alert('Please fill all company profile fields.');
-        return;
-    }
+            if (!name || !address || !email || !contact) {
+                alert('Please fill all company profile fields.');
+                return;
+            }
 
-    // Update profile state
-    appState.companyProfile = { name, address, email, contact, logo };
+            appState.companyProfile = { name, address, email, contact, logo };
+            localStorage.setItem('companyProfile', JSON.stringify(appState.companyProfile));
+            autoSave(); // Save updated profile to the main data file as well
+            logAction('UPDATE_PROFILE', `Updated company profile information.`);
+            alert('Company profile updated successfully!');
+            renderApp();
+        }
 
-    // Remove old localStorage saving (no longer needed)
-    // localStorage.setItem('companyProfile', JSON.stringify(appState.companyProfile));
+        async function handleBackup() {
+            if (window.electronAPI) {
+                const result = await window.electronAPI.backupData();
+                if (result.success) {
+                    alert(`Data successfully backed up to: ${result.path}`);
+                } else {
+                    // Don't show an error if the user just cancelled the dialog
+                    if (result.error) {
+                        alert(`Backup failed: ${result.error}`);
+                    } else {
+                        console.log('Backup cancelled by user.');
+                    }
+                }
+            }
+        }
 
-    // Log AFTER updating state
-    logAction('UPDATE_PROFILE', `Updated company profile information.`);
-
-    // UI feedback
-    alert('Company profile updated successfully!');
-
-    // Render UI changes
-    renderApp();
-
-    // FINAL SAVE — captures everything above
-    autoSave();
-}
+        async function handleRestore() {
+            if (window.electronAPI) {
+                const result = await window.electronAPI.restoreData();
+                if (result.success) {
+                    // The main process will reload the window, so no alert is needed here.
+                } else {
+                    console.log('Restore cancelled by user.');
+                }
+            }
+        }
 
         function printReport() {
             // This will trigger the browser's print dialog, using the @media print styles to format the output.
