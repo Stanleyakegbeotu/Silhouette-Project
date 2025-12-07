@@ -1,36 +1,28 @@
-const { app, BrowserWindow, ipcMain } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const Store = require("electron-store").default;
 
 function createWindow() {
-  // Create the browser window.
   const mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
     webPreferences: {
-      // Since your app is self-contained and doesn't load remote content,
-      // these settings are secure.
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js') // Optional: for future use
+      preload: path.join(__dirname, "preload.js")
     }
   });
 
-  // and load the index.html of the app.
-  mainWindow.loadFile('index.html');
-
-  // Open the DevTools.
-  // mainWindow.webContents.openDevTools();
+  mainWindow.loadFile("index.html");
 }
 
-// This method will be called when Electron has finished
-// initialization and is ready to create browser windows.
+// Ready
 app.whenReady().then(createWindow);
 
-// Quit when all windows are closed, except on macOS.
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
+// Quit behaviour
+app.on("window-all-closed", () => {
+  if (process.platform !== "darwin") {
     app.quit();
   }
 });
@@ -38,27 +30,86 @@ app.on('window-all-closed', () => {
 // Initialize electron-store
 const store = new Store();
 
-// --- IPC Handlers for Data Persistence ---
+// --- SAFE DATA LOAD / SAVE HANDLERS ---
 
-// Handle request to load data
+// Load data safely (prevents crash from corrupted file)
 ipcMain.handle("load-data", () => {
   try {
-    // Use electron-store to get data. It handles file path and reading.
-    // The key 'appData' can be anything you choose.
-    return store.get("appData");
+    const data = store.get("appData");
+
+    // If file was empty or null, return an empty object instead of crashing frontend
+    return data || {};
   } catch (error) {
-    console.error("Could not read or parse the data file. It might be corrupted.", error);
-    // Returning null allows the app to start with a fresh state instead of crashing.
-    return null;
+    console.error("Config file corrupted. Resetting to empty.", error);
+
+    // Delete corrupted file
+    store.delete("appData");
+
+    // Return safe empty data
+    return {};
   }
 });
 
-// Handle request to save data
+// Save data safely (prevents corrupted JSON)
 ipcMain.on("save-data", (event, data) => {
-  // Use electron-store to set data. It handles file writing.
   try {
-    store.set("appData", data);
+    // Remove circular references, functions, etc.
+    const clean = JSON.parse(JSON.stringify(data));
+
+    // Save clean JSON data only
+    store.set("appData", clean);
   } catch (error) {
-    console.error("Failed to save data:", error);
+    console.error("Failed to save sanitized data:", error);
   }
+});
+
+// --- BACKUP & RESTORE HANDLERS ---
+
+// Handle backup request
+ipcMain.handle("backup-data", async () => {
+  const { filePath } = await dialog.showSaveDialog({
+    title: "Save Data Backup",
+    defaultPath: `silhouette-backup-${new Date().toISOString().split('T')[0]}.json`,
+    filters: [{ name: "JSON Files", extensions: ["json"] }],
+  });
+
+  if (filePath) {
+    try {
+      const data = store.get("appData");
+      fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+      return { success: true, path: filePath };
+    } catch (error) {
+      console.error("Failed to write backup file:", error);
+      return { success: false, error: error.message };
+    }
+  }
+  return { success: false };
+});
+
+// Handle restore request
+ipcMain.handle("restore-data", async (event) => {
+  const { response } = await dialog.showMessageBox({
+    type: "warning",
+    buttons: ["Cancel", "Restore"],
+    defaultId: 0,
+    title: "Confirm Restore",
+    message: "Are you sure you want to restore data from a backup?",
+    detail: "This will overwrite ALL current application data. This action cannot be undone.",
+  });
+
+  if (response === 1) { // User clicked "Restore"
+    const { filePaths } = await dialog.showOpenDialog({
+      title: "Select Backup File to Restore",
+      properties: ["openFile"],
+      filters: [{ name: "JSON Files", extensions: ["json"] }],
+    });
+
+    if (filePaths && filePaths.length > 0) {
+      const backupData = JSON.parse(fs.readFileSync(filePaths[0], "utf-8"));
+      store.set("appData", backupData);
+      BrowserWindow.fromWebContents(event.sender).reload();
+      return { success: true };
+    }
+  }
+  return { success: false };
 });

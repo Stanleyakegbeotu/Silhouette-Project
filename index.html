@@ -5,7 +5,862 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Silhouette Diagnostic Consultants</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="style.css">
+    <style>
+         
+        :root {
+            --primary: #0e4a7c;
+            --primary-light: #1565a0;
+            --accent: #14b8a6;
+            --accent-light: #2dd4bf;
+            --background: #f8fafc;
+            --surface: #ffffff;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --border: #e2e8f0;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --error: #ef4444;
+            --sidebar-bg: #1a3d5c;
+        }
+
+        html.dark-mode {
+            --background: #0f172a;
+            --surface: #1e293b;
+            --text-primary: #f1f5f9;
+            --text-secondary: #cbd5e1;
+            --border: #334155;
+            --sidebar-bg: #0f172a;
+        }
+
+        /* Color theme palettes */
+        /* Blue Theme (default) */
+        html.theme-blue {
+            --primary: #0e4a7c;
+            --primary-light: #1565a0;
+            --accent: #14b8a6;
+            --accent-light: #2dd4bf;
+        }
+
+        /* Skyblue Theme */
+        html.theme-skyblue {
+            --primary: #0369a1;
+            --primary-light: #0284c7;
+            --accent: #06b6d4;
+            --sidebar-bg: #0369a1;
+            --accent-light: #22d3ee;
+        }
+
+        /* Gray Theme */
+        html.theme-gray {
+            --primary: #374151;
+            --primary-light: #4b5563;
+            --accent: #6b7280;
+            --accent-light: #9ca3af;
+            --sidebar-bg: #374151;
+        }
+
+        /* Brown Theme */
+        html.theme-brown {
+            --primary: #92400e;
+            --primary-light: #b45309;
+            --accent: #a16207;
+            --accent-light: #ca8a04;
+            --sidebar-bg: #92400e;
+        }
+
+        /* Green Theme */
+        html.theme-green {
+            --primary: #166534;
+            --primary-light: #15803d;
+            --accent: #059669;
+            --accent-light: #10b981;
+            --sidebar-bg: #166534;
+        }
+
+        /* Purple Theme */
+        html.theme-purple {
+            --primary: #6b21a8;
+            --primary-light: #7e22ce;
+            --accent: #9333ea;
+            --accent-light: #a855f7;
+            --sidebar-bg: #6b21a8;
+        }
+
+        * {
+            --tw-bg-opacity: 1;
+            --tw-text-opacity: 1;
+        }
+
+        body {
+            background-color: var(--background);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            margin: 0;
+            padding: 0;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        /* Added comprehensive animation keyframes */
+        @keyframes slideInLeft {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes slideInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        @keyframes popIn {
+            0% {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+            50% {
+                transform: scale(1.05);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.7;
+            }
+        }
+
+        .animate-slide-in {
+            animation: slideInLeft 0.5s ease-out;
+        }
+
+        .animate-slide-up {
+            animation: slideInUp 0.5s ease-out;
+        }
+
+        .animate-fade-in {
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        .animate-pop {
+            animation: popIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .animate-pulse {
+            animation: pulse 2s infinite;
+        }
+
+        .btn-primary {
+            background-color: var(--primary);
+            color: white;
+            padding: 0.5rem 1.5rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+
+        .btn-primary:hover {
+            background-color: var(--primary-light);
+        }
+
+        .btn-secondary {
+            background-color: transparent;
+            color: var(--text-secondary);
+            padding: 0.5rem 1.5rem;
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-secondary:hover {
+            background-color: var(--background);
+        }
+
+        .card {
+            background-color: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            transition: all 0.3s ease;
+        }
+
+        /* Added card hover animation */
+        .card:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            transform: translateY(-2px);
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            color: white;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 0 2rem 2rem 2rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            border-radius: 0.75rem;
+            transition: all 0.3s;
+        }
+        
+
+        .header-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .header-role {
+            font-size: 0.875rem;
+            opacity: 0.9;
+            margin-left: 1rem;
+        }
+
+        .header-user {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            font-size: 0.95rem;
+        }
+
+        .nav-tabs {
+            display: flex;
+            gap: 1rem;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 1.5rem;
+        }
+
+        .nav-tab {
+            padding: 0.75rem 1rem;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            color: var(--text-secondary);
+            transition: all 0.2s;
+        }
+
+        .nav-tab.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+        }
+
+        .quick-card {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            color: white;
+            padding: 1.5rem;
+            border-radius: 0.75rem;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .quick-card:hover {
+            transform: translateY(-8px) scale(1.02);
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
+        }
+
+        .quick-card.accent {
+            background: linear-gradient(135deg, var(--accent) 0%, var(--accent-light) 100%);
+        }
+
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 280px;
+            height: 100vh;
+            background-color: var(--sidebar-bg);
+            color: white;
+            padding: 1.5rem 1rem;
+            overflow-y: auto;
+            transition: width 0.3s, transform 0.3s;
+            z-index: 1000;
+            box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .sidebar.collapsed {
+            width: 80px;
+        }
+
+        .sidebar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .sidebar-logo {
+            font-size: 1.25rem;
+            font-weight: 700;
+            transition: opacity 0.3s;
+        }
+
+        .sidebar.collapsed .sidebar-logo {
+            opacity: 0;
+            visibility: hidden;
+            width: 0;
+        }
+
+        .sidebar-toggle {
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            font-size: 1.25rem;
+            padding: 0.25rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.2s;
+        }
+
+        .sidebar-toggle:hover {
+            transform: scale(1.1);
+        }
+
+        .sidebar-nav {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.75rem 1rem;
+            cursor: pointer;
+            border-radius: 0.5rem;
+            color: rgba(255, 255, 255, 0.8);
+            transition: all 0.2s;
+            text-decoration: none;
+            font-size: 0.95rem;
+            white-space: nowrap;
+        }
+
+        .nav-item:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+
+        .nav-item.active {
+            background-color: rgba(255, 255, 255, 0.15);
+            color: white;
+        }
+
+        .nav-item-icon {
+            font-size: 1.25rem;
+            min-width: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .nav-item-label {
+            transition: opacity 0.3s;
+        }
+
+        .sidebar.collapsed .nav-item-label {
+            opacity: 0;
+            visibility: hidden;
+            width: 0;
+        }
+
+        .sidebar-footer {
+            margin-top: auto;
+            padding-top: 1rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .main-container {
+            margin-left: 280px;
+            transition: margin-left 0.3s;
+        }
+
+        .main-container.sidebar-collapsed {
+            margin-left: 80px;
+        }
+
+        .main-content {
+            padding: 0 2rem 2rem 2rem;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .form-input, .form-select, .form-textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            font-size: 0.95rem;
+            font-family: inherit;
+            transition: border-color 0.2s;
+        }
+
+        .form-input:focus, .form-select:focus, .form-textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(14, 74, 124, 0.1);
+        }
+
+        .form-textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .table thead {
+            background-color: var(--background);
+        }
+
+        .table th, .table td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .table th {
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .table tr:hover {
+            background-color: var(--background);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .badge-success {
+            background-color: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+        }
+
+        .badge-warning {
+            background-color: rgba(245, 158, 11, 0.1);
+            color: var(--warning);
+        }
+
+        .badge-error {
+            background-color: rgba(239, 68, 68, 0.1);
+            color: var(--error);
+        }
+
+        .badge-primary {
+            background-color: rgba(14, 74, 124, 0.1);
+            color: var(--primary);
+        }
+
+        .wizard-step {
+            margin-bottom: 2rem;
+        }
+
+        .wizard-header {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .step-indicator {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+            flex: 1;
+        }
+
+        .step-number {
+            width: 2.5rem;
+            height: 2.5rem;
+            border-radius: 50%;
+            background-color: var(--border);
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+        }
+
+        .step-indicator.active .step-number {
+            background-color: var(--primary);
+            color: white;
+        }
+
+        .step-indicator.completed .step-number {
+            background-color: var(--success);
+            color: white;
+        }
+
+        .step-label {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .step-indicator.active .step-label {
+            color: var(--primary);
+        }
+
+        .step-indicator.completed .step-label {
+            color: var(--success);
+        }
+
+        .section-container {
+            margin-bottom: 2rem;
+        }
+
+        .section-title {
+            font-size: 1.125rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+        }
+
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.5rem;
+        }
+
+        @media (max-width: 1024px) {
+            .grid-2, .grid-3 {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .stat-box {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            color: white;
+            padding: 1.5rem;
+            border-radius: 0.75rem;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .stat-box:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 16px rgba(14, 74, 124, 0.2);
+        }
+
+        .stat-box.accent {
+            background: linear-gradient(135deg, var(--accent) 0%, var(--accent-light) 100%);
+        }
+
+        .stat-label {
+            font-size: 0.875rem;
+            opacity: 0.9;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+        }
+
+        .responsive-table-wrapper {
+            overflow-x: auto;
+        }
+
+        /* Added payment method styles */
+        .payment-method {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .payment-option {
+            flex: 1;
+            min-width: 150px;
+            padding: 1rem;
+            border: 2px solid var(--border);
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+            background: var(--surface);
+        }
+
+        .payment-option:hover {
+            border-color: var(--primary);
+            background-color: rgba(14, 74, 124, 0.05);
+        }
+
+        .payment-option.active {
+            border-color: var(--primary);
+            background-color: rgba(14, 74, 124, 0.1);
+            font-weight: 600;
+        }
+
+        /* Added payment status badge styles */
+        .badge-full {
+            background-color: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+        }
+
+        .badge-installment {
+            background-color: rgba(245, 158, 11, 0.1);
+            color: var(--warning);
+        }
+
+        /* Added chart bar animation */
+        .chart-bar {
+            transition: all 0.3s ease;
+            border-radius: 0.25rem;
+        }
+
+        .chart-bar:hover {
+            opacity: 0.8;
+            filter: brightness(1.1);
+        }
+
+        .chart-container {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        .chart-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .chart-label {
+            min-width: 200px;
+            font-size: 0.95rem;
+            color: var(--text-primary);
+        }
+
+        .chart-bar-container {
+            flex: 1;
+            height: 40px;
+            background-color: var(--background);
+            border-radius: 0.25rem;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .chart-bar {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary) 0%, var(--accent) 100%);
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 0.5rem;
+            color: white;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+
+        /* Added filter section styles */
+        .filter-section {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+            align-items: flex-end;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            flex: 1;
+            min-width: 150px;
+        }
+
+        .filter-group label {
+            font-weight: 500;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+        }
+
+        .filter-group input,
+        .filter-group select {
+            padding: 0.5rem;
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            font-size: 0.95rem;
+        }
+
+        .filter-group button {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .filter-group button:hover {
+            background-color: var(--primary-light);
+        }
+
+        /* Added theme option styles */
+        .theme-option {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            border: 2px solid var(--border);
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            background-color: var(--surface);
+        }
+
+        .theme-option:hover {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(14, 74, 124, 0.1);
+        }
+
+        .theme-option.active {
+            border-color: var(--primary);
+            background-color: rgba(14, 74, 124, 0.05);
+        }
+
+        .theme-preview {
+            width: 3rem;
+            height: 3rem;
+            border-radius: 0.5rem;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .mode-toggle {
+            display: flex;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            background-color: var(--background);
+            border-radius: 0.5rem;
+            border: 1px solid var(--border);
+        }
+
+        .mode-toggle-btn {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            border: none;
+            border-radius: 0.375rem;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s;
+            background-color: transparent;
+            color: var(--text-secondary);
+        }
+
+        .mode-toggle-btn.active {
+            background-color: var(--primary);
+            color: white;
+        }
+
+        .color-swatch {
+            width: 2rem;
+            height: 2rem;
+            border-radius: 0.375rem;
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .color-swatch.active {
+            border-color: var(--text-primary);
+            transform: scale(1.1);
+        }
+
+        .settings-card {
+            background-color: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            animation: slideInUp 0.5s ease-out;
+        }
+
+        .settings-card-title {
+            font-size: 1.125rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+        }
+
+        .settings-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 1rem;
+        }
+
+        /* Print-specific styles */
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            #printable-area, #printable-area * {
+                visibility: visible;
+            }
+            #printable-area {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+            }
+        }
+    
+    </style>
 </head>
 <body>
     <div id="app"></div>
@@ -629,45 +1484,81 @@
         // Mock Data - Audit Log
         let auditLog = [];
 
-        // ====== UTILITY FUNCTIONS ======
-        async function saveData() {
-            if (window.electronAPI) {
-                const dataToSave = {
-                    users,
-                    prList,
-                    inventory,
-                    orders,
-                    auditLog,
-                    companyProfile: appState.companyProfile
-                };
-                await window.electronAPI.saveData(dataToSave);
-            }
+        // ====== UTILITY FUNCTIONS (SAFE VERSION) ======
+
+// Clean data before storing (Fix A)
+function prepareForSave(data) {
+    try {
+        // Converts to plain JSON, removing any circular refs, methods, DOM objects, etc.
+        return JSON.parse(JSON.stringify(data));
+    } catch (error) {
+        console.error("Error sanitizing data before save:", error);
+        return {};
+    }
+}
+
+// Debounced Auto-Save (prevents saving too often)
+let saveTimeout;
+
+function autoSave() {
+    clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(() => {
+        saveData();
+    }, 500); // Save 0.5s after last change
+}
+
+
+async function saveData() {
+    if (window.electronAPI) {
+
+        // Build data object
+        const rawData = {
+            users,
+            prList,
+            inventory,
+            orders,
+            auditLog,
+            companyProfile: appState.companyProfile
+        };
+
+        // Sanitize before saving
+        const cleanData = prepareForSave(rawData);
+
+        // Send to backend
+        await window.electronAPI.saveData(cleanData);
+    }
+}
+
+async function loadData() {
+    if (window.electronAPI) {
+        const loadedData = await window.electronAPI.loadData();
+
+        if (loadedData) {
+
+            users = loadedData.users || [];
+            prList = loadedData.prList || prList;
+            inventory = loadedData.inventory || inventory;
+
+            // Rehydrate orders
+            orders = (loadedData.orders || []).map(order => ({
+                ...order,
+                date: new Date(order.date)
+            }));
+
+            // Rehydrate audit logs
+            auditLog = (loadedData.auditLog || []).map(log => ({
+                ...log,
+                timestamp: new Date(log.timestamp)
+            }));
+
+            // Restore company settings
+            appState.companyProfile = loadedData.companyProfile || appState.companyProfile;
         }
+    }
+}
 
-        async function loadData() {
-            if (window.electronAPI) {
-                const loadedData = await window.electronAPI.loadData();
-                if (loadedData) {
-                    users = loadedData.users || [];
-                    prList = loadedData.prList || prList;
-                    inventory = loadedData.inventory || inventory;
-                    
-                    // Convert timestamp strings in orders back to Date objects
-                    orders = (loadedData.orders || []).map(order => ({
-                        ...order,
-                        date: new Date(order.date) // Re-hydrate the date string into a Date object
-                    }));
 
-                    // Convert timestamp strings in auditLog back to Date objects
-                    auditLog = (loadedData.auditLog || []).map(log => ({
-                        ...log,
-                        timestamp: new Date(log.timestamp)
-                    }));
-
-                    appState.companyProfile = loadedData.companyProfile || appState.companyProfile;
-                }
-            }
-        }
+        
 
         function generatePID() {
             return 'P' + Math.floor(Math.random() * 10000).toString().padStart(4, '0');
@@ -691,7 +1582,7 @@
                 action: action,
                 details: details
             });
-            saveData(); // Save after every action
+            autoSave(); // Save after every action
         }
 
         function getOrderStats() {
@@ -1536,10 +2427,14 @@
 
             return `
                 <div style="max-width: 1400px; margin: 0 auto;">
-                    <h2 style="font-size: 2rem; font-weight: 700; margin-bottom: 2rem;">Analytics & Reports</h2>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                        <h2 style="font-size: 2rem; font-weight: 700;">Analytics & Reports</h2>
+                        <button onclick="printReport()" class="btn-primary">🖨️ Print Report</button>
+                    </div>
 
+                    <div id="printable-area">
                     <!-- Key Financial Metrics -->
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+                    <div class="stat-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
                         <div class="stat-box animate-slide-up" style="border-left: 4px solid var(--success); animation-delay: 0s;">
                             <p class="stat-label">Total Revenue (YTD)</p>
                             <p class="stat-value" style="color: var(--success);">${formatCurrency(stats.totalRevenue)}</p>
@@ -1628,6 +2523,7 @@
                                 `;
                             }).join('')}
                         </div>
+                    </div>
                     </div>
 
                     <!-- Data Export -->
@@ -1920,6 +2816,21 @@
                 <div class="animate-slide-up">
                     <h1 style="font-size: 2rem; font-weight: 700; margin-bottom: 2rem; color: var(--text-primary);">Settings</h1>
                     
+                    ${isAdmin ? `
+                    <div class="settings-card">
+                        <div class="settings-card-title">Data Management</div>
+                        <p style="color: var(--text-secondary); margin-bottom: 1.5rem; font-size: 0.9rem;">Create a backup of your application data or restore from a previous backup file. It is recommended to create backups regularly.</p>
+                        <div style="display: flex; gap: 1rem;">
+                            <button onclick="handleBackup()" class="btn-primary">
+                                💾 Backup Data
+                            </button>
+                            <button onclick="handleRestore()" class="btn-secondary" style="color: var(--error); border-color: var(--error);">
+                                🔄 Restore from Backup
+                            </button>
+                        </div>
+                    </div>
+                    ` : ''}
+
                     <div class="settings-card">
                         <div class="settings-card-title">Theme Mode</div>
                         <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.9rem;">Choose between light and dark mode for your preferred viewing experience</p>
@@ -2186,26 +3097,39 @@
         }
 
         function addNewPRAgent() {
-            const query = document.getElementById('referredBySearch').value.trim();
-            if (!query) {
-                alert('Please enter a PR agent name');
-                return;
-            }
-            const phone = prompt(`Enter phone number for "${query}":`, '');
-            if (phone === null) return; // user cancelled
-            if (!phone.trim()) {
-                alert('Phone number is required');
-                return;
-            }
-            // Add to prList
-            const newId = (prList.length > 0 ? Math.max(...prList.map(p => p.id)) : 0) + 1;
-            prList.push({ id: newId, name: query, phone: phone.trim() });
-            appState.billingData.referredBy = query;
-            document.getElementById('referredBySearch').value = query;
-            document.getElementById('prSuggestions').style.display = 'none';
-            document.getElementById('addPRAgentContainer').style.display = 'none';
-            logAction('ADD_PR_AGENT', `New PR agent added: ${query} (${phone})`);
-        }
+    const query = document.getElementById('referredBySearch').value.trim();
+    if (!query) {
+        alert('Please enter a PR agent name');
+        return;
+    }
+
+    const phone = prompt(`Enter phone number for "${query}":`, '');
+    if (phone === null) return; // user cancelled
+
+    if (!phone.trim()) {
+        alert('Phone number is required');
+        return;
+    }
+
+    // Add to prList
+    const newId = (prList.length > 0 ? Math.max(...prList.map(p => p.id)) : 0) + 1;
+    prList.push({ id: newId, name: query, phone: phone.trim() });
+
+    // Update billing reference
+    appState.billingData.referredBy = query;
+
+    // UI updates
+    document.getElementById('referredBySearch').value = query;
+    document.getElementById('prSuggestions').style.display = 'none';
+    document.getElementById('addPRAgentContainer').style.display = 'none';
+
+    // Log after state changes
+    logAction('ADD_PR_AGENT', `New PR agent added: ${query} (${phone})`);
+
+    // Save everything persistently
+    autoSave();
+}
+
 
         function handleLogin() {
             const username = document.getElementById('loginUsername').value.trim();
@@ -2228,49 +3152,61 @@
             }
         }
 
-        function handleFirstTimeSetup() {
-            const setupName = document.getElementById('setupFullName').value.trim();
-            const setupUsername = document.getElementById('setupUsername').value.trim();
-            const setupPassword = document.getElementById('setupPassword').value;
-            const setupPasswordConfirm = document.getElementById('setupPasswordConfirm').value;
+       function handleFirstTimeSetup() {
+    const setupName = document.getElementById('setupFullName').value.trim();
+    const setupUsername = document.getElementById('setupUsername').value.trim();
+    const setupPassword = document.getElementById('setupPassword').value;
+    const setupPasswordConfirm = document.getElementById('setupPasswordConfirm').value;
 
-            if (!setupName || !setupUsername || !setupPassword || !setupPasswordConfirm) {
-                alert('Please fill in all fields');
-                return;
-            }
+    if (!setupName || !setupUsername || !setupPassword || !setupPasswordConfirm) {
+        alert('Please fill in all fields');
+        return;
+    }
 
-            if (setupPassword !== setupPasswordConfirm) {
-                alert('Passwords do not match');
-                return;
-            }
+    if (setupPassword !== setupPasswordConfirm) {
+        alert('Passwords do not match');
+        return;
+    }
 
-            if (setupPassword.length < 6) {
-                alert('Password must be at least 6 characters');
-                return;
-            }
+    if (setupPassword.length < 6) {
+        alert('Password must be at least 6 characters');
+        return;
+    }
 
-            // Create first admin user
-            users.push({
-                username: setupUsername,
-                password: setupPassword,
-                role: 'Admin',
-                fullName: setupName
-            });
+    // Create first admin user
+    users.push({
+        username: setupUsername,
+        password: setupPassword,
+        role: 'Admin',
+        fullName: setupName
+    });
 
-            saveData(); // Save the new user
-            // Set user BEFORE logging action
-            appState.currentUser = { username: setupUsername, role: 'Admin', fullName: setupName };
-            logAction('SETUP', `First admin user created: ${setupName} (${setupUsername})`);
-            appState.currentView = 'dashboard';
-            renderApp();
-        }
+    // Set user BEFORE logging the action
+    appState.currentUser = {
+        username: setupUsername,
+        role: 'Admin',
+        fullName: setupName
+    };
+
+    // Log setup event
+    logAction('SETUP', `First admin user created: ${setupName} (${setupUsername})`);
+
+    // Move to dashboard
+    appState.currentView = 'dashboard';
+
+    // FINAL Save — after all state updates
+    autoSave();
+
+    renderApp();
+}
+
 
         function logout() {
             logAction('LOGOUT', `User '${appState.currentUser.fullName}' logged out.`);
             appState.currentUser = null;
             appState.currentView = 'login';
             appState.billingStep = 1;
-            saveData(); // Persist any final state changes
+            autoSave(); // Persist any final state changes
             renderApp();
         }
 
@@ -2540,49 +3476,102 @@
             container.innerHTML = Object.keys(groups).map(cat => `<div style="margin-bottom:0.5rem;"><div style="font-weight:700;">${cat}</div>${groups[cat].map(i => `<div class="suggestion-item" data-id="${i.id}" style="padding:0.35rem; cursor:pointer;">${i.name} — ${formatCurrency(i.price)}</div>`).join('')}</div>`).join('');
         }
 
-        function submitBilling() {
-            if (appState.billingData.selectedServices.length === 0) {
-                alert('Please select at least one service');
-                return;
-            }
+       function submitBilling() {
+    if (appState.billingData.selectedServices.length === 0) {
+        alert('Please select at least one service');
+        return;
+    }
 
-            if (appState.billingData.paymentStatus === 'installment' && appState.billingData.amountPaid <= 0) {
-                alert('For installment payments, please enter the amount paid.');
-                return;
-            }
+    if (
+        appState.billingData.paymentStatus === 'installment' &&
+        appState.billingData.amountPaid <= 0
+    ) {
+        alert('For installment payments, please enter the amount paid.');
+        return;
+    }
 
-            const newOrder = {
-                id: orders.length + 1,
-                patientName: appState.billingData.patientName,
-                pid: appState.billingData.pid,
-                // store services as objects with name, category and price so VIP overrides are preserved
-                services: appState.billingData.selectedServices.map(s => ({ name: s.name, category: s.category || (inventory.find(i => i.name === s.name) || {}).category || '', price: (s.overridePrice != null ? s.overridePrice : s.price) })),
-                total: appState.billingData.total,
-                status: appState.billingData.paymentStatus === 'full' ? 'PAID' : 'PENDING',
-                referredBy: appState.billingData.referredBy || 'Not Specified',
-                date: new Date(), // Store as a full Date object
-                time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }), // Time can remain a string
-                staffName: appState.billingData.staffName,
-                paymentMethod: appState.billingData.paymentMethod,
-                paymentStatus: appState.billingData.paymentStatus,
-                amountPaid: appState.billingData.paymentStatus === 'full' ? appState.billingData.total : appState.billingData.amountPaid,
-                balance: appState.billingData.paymentStatus === 'full' ? 0 : appState.billingData.balance
-            };
+    const newOrder = {
+        id: orders.length + 1,
+        patientName: appState.billingData.patientName,
+        pid: appState.billingData.pid,
 
-            orders.push(newOrder);
-            saveData(); // Save after adding a new order
-            logAction('CREATE_BILLING', `Created new bill for '${newOrder.patientName}' (PID: ${newOrder.pid}) with a total of ${formatCurrency(newOrder.total)}.`);
-            alert('Billing completed successfully! The receipt will now be printed.');
-            printReceipt(newOrder);
+        // Store service objects properly
+        services: appState.billingData.selectedServices.map(s => ({
+            name: s.name,
+            category:
+                s.category ||
+                (inventory.find(i => i.name === s.name) || {}).category ||
+                '',
+            price: s.overridePrice != null ? s.overridePrice : s.price
+        })),
 
-            appState.billingData = {
-                patientName: '', pid: '', contact: '', referredBy: '', staffName: '',
-                selectedServices: [], discount: 0, total: 0, paymentMethod: 'cash', paymentStatus: 'full',
-                amountPaid: 0, balance: 0
-            };
-            appState.billingStep = 1;
-            navigateTo('dashboard');
-        }
+        total: appState.billingData.total,
+        status:
+            appState.billingData.paymentStatus === 'full'
+                ? 'PAID'
+                : 'PENDING',
+
+        referredBy: appState.billingData.referredBy || 'Not Specified',
+
+        date: new Date(), // Date saved as actual Date
+        time: new Date().toLocaleTimeString('en-IN', {
+            hour: '2-digit',
+            minute: '2-digit'
+        }),
+
+        staffName: appState.billingData.staffName,
+        paymentMethod: appState.billingData.paymentMethod,
+        paymentStatus: appState.billingData.paymentStatus,
+
+        amountPaid:
+            appState.billingData.paymentStatus === 'full'
+                ? appState.billingData.total
+                : appState.billingData.amountPaid,
+
+        balance:
+            appState.billingData.paymentStatus === 'full'
+                ? 0
+                : appState.billingData.balance
+    };
+
+    // Add order
+    orders.push(newOrder);
+
+    // Log action
+    logAction(
+        'CREATE_BILLING',
+        `Created new bill for '${newOrder.patientName}' (PID: ${newOrder.pid}) with a total of ${formatCurrency(newOrder.total)}.`
+    );
+
+    alert('Billing completed successfully! The receipt will now be printed.');
+    printReceipt(newOrder);
+
+    // Reset billing data AFTER the receipt is printed
+    appState.billingData = {
+        patientName: '',
+        pid: '',
+        contact: '',
+        referredBy: '',
+        staffName: '',
+        selectedServices: [],
+        discount: 0,
+        total: 0,
+        paymentMethod: 'cash',
+        paymentStatus: 'full',
+        amountPaid: 0,
+        balance: 0
+    };
+
+    // Reset billing step
+    appState.billingStep = 1;
+
+    // Navigate back to dashboard
+    navigateTo('dashboard');
+
+    // FINAL SAVE — captures everything updated above
+    autoSave();
+}
+
 
         function resetAddForms() {
             appState.showAddPRForm = false;
@@ -2613,7 +3602,7 @@
                 phone
             });
 
-            saveData(); // Save the updated PR list
+            autoSave(); // Save the updated PR list
             logAction('CREATE_PR', `Added new PR: '${name}' (${phone}).`);
             appState.showAddPRForm = false;
             renderApp();
@@ -2624,23 +3613,34 @@
             renderApp();
         }
 
-        function addNewInventoryItem() {
-            const name = document.getElementById('newInventoryName').value;
-            const category = document.getElementById('newInventoryCategory').value;
-            const price = parseFloat(document.getElementById('newInventoryPrice').value);
+       function addNewInventoryItem() {
+    const name = document.getElementById('newInventoryName').value;
+    const category = document.getElementById('newInventoryCategory').value;
+    const price = parseFloat(document.getElementById('newInventoryPrice').value);
 
-            if (!name || !category || isNaN(price) || price <= 0) {
-                alert('Please fill all fields with valid data for the new item.');
-                return;
-            }
+    if (!name || !category || isNaN(price) || price <= 0) {
+        alert('Please fill all fields with valid data for the new item.');
+        return;
+    }
 
-            inventory.push({ id: inventory.length + 1, name, category, price });
-            saveData(); // Save the updated inventory
+    // Add new inventory item
+    inventory.push({ id: inventory.length + 1, name, category, price });
 
-            logAction('CREATE_INVENTORY', `Added new test: '${name}' with price ${formatCurrency(price)}.`);
-            appState.showAddInventoryForm = false;
-            renderApp();
-        }
+    // Log after state update
+    logAction(
+        'CREATE_INVENTORY',
+        `Added new test: '${name}' with price ${formatCurrency(price)}.`
+    );
+
+    // UI updates
+    appState.showAddInventoryForm = false;
+
+    // Final save (ensures everything is included)
+    autoSave();
+
+    renderApp();
+}
+
 
         function toggleAddStaffForm() {
             appState.showAddStaffForm = !appState.showAddStaffForm;
@@ -2681,7 +3681,7 @@
                 fullName
             });
 
-            saveData(); // Save the new user
+            autoSave(); // Save the new user
             logAction('CREATE_STAFF', `Added new staff member: '${fullName}' (Username: ${username}).`);
             appState.showAddStaffForm = false;
             renderApp();
@@ -2693,7 +3693,7 @@
 
             if (confirm(`Are you sure you want to delete "${userToDelete.fullName}"? This action cannot be undone.`)) {
                 users = users.filter(u => u.username !== username);
-                saveData(); // Save the updated user list
+                autoSave(); // Save the updated user list
                 logAction('DELETE_STAFF', `Deleted staff: '${userToDelete.fullName}' (Username: ${username}).`);
                 renderApp();
             }
@@ -2726,7 +3726,7 @@
             pr.name = document.getElementById(`editPRName-${id}`).value.trim();
             pr.phone = document.getElementById(`editPRPhone-${id}`).value.trim();
 
-            saveData(); // Save changes
+            autoSave(); // Save changes
             logAction('EDIT_PR', `Edited PR #${id}. FROM: [${oldDetails}] TO: [Name: ${pr.name}, Phone: ${pr.phone}].`);
             appState.editingPRId = null;
             renderApp();
@@ -2739,7 +3739,7 @@
                 if (index > -1) {
                     prList.splice(index, 1);
                 }
-                saveData(); // Save changes
+                autoSave(); // Save changes
                 logAction('DELETE_PR', `Deleted PR: '${prToDelete.name}' (ID: ${prToDelete.id}).`);
                 renderApp();
             }
@@ -2754,7 +3754,7 @@
             item.category = document.getElementById(`editInventoryCategory-${id}`).value;
             item.price = parseFloat(document.getElementById(`editInventoryPrice-${id}`).value);
 
-            saveData(); // Save changes
+            autoSave(); // Save changes
             logAction('EDIT_INVENTORY', `Edited Test #${id}. FROM: [${oldDetails}] TO: [Name: ${item.name}, Price: ${formatCurrency(item.price)}].`);
             appState.editingInventoryId = null;
             renderApp();
@@ -2767,7 +3767,7 @@
                 if (index > -1) {
                     inventory.splice(index, 1);
                 }
-                saveData(); // Save changes
+                autoSave(); // Save changes
                 logAction('DELETE_INVENTORY', `Deleted test: '${itemToDelete.name}' (ID: ${itemToDelete.id}).`);
                 renderApp();
             }
@@ -2817,7 +3817,7 @@
                 order.paymentStatus = 'full';
                 order.balance = 0;
                 order.amountPaid = order.total;
-                saveData(); // Save the updated order
+                autoSave(); // Save the updated order
                 logAction('UPDATE_PAYMENT', `Marked order #${order.id} for '${order.patientName}' as fully paid.`);
                 printReceipt(order); // Print receipt after updating
                 renderApp(); // Re-render to update the modal view
@@ -2827,24 +3827,40 @@
             }
         }
 
-        function saveCompanyProfile() {
-            const name = document.getElementById('companyName').value;
-            const address = document.getElementById('companyAddress').value;
-            const email = document.getElementById('companyEmail').value;
-            const contact = document.getElementById('companyContact').value;
-            const logo = document.getElementById('companyLogo').value;
+       function saveCompanyProfile() {
+    const name = document.getElementById('companyName').value;
+    const address = document.getElementById('companyAddress').value;
+    const email = document.getElementById('companyEmail').value;
+    const contact = document.getElementById('companyContact').value;
+    const logo = document.getElementById('companyLogo').value;
 
-            if (!name || !address || !email || !contact) {
-                alert('Please fill all company profile fields.');
-                return;
-            }
+    if (!name || !address || !email || !contact) {
+        alert('Please fill all company profile fields.');
+        return;
+    }
 
-            appState.companyProfile = { name, address, email, contact, logo };
-            localStorage.setItem('companyProfile', JSON.stringify(appState.companyProfile));
-            saveData(); // Save updated profile to the main data file as well
-            logAction('UPDATE_PROFILE', `Updated company profile information.`);
-            alert('Company profile updated successfully!');
-            renderApp();
+    // Update profile state
+    appState.companyProfile = { name, address, email, contact, logo };
+
+    // Remove old localStorage saving (no longer needed)
+    // localStorage.setItem('companyProfile', JSON.stringify(appState.companyProfile));
+
+    // Log AFTER updating state
+    logAction('UPDATE_PROFILE', `Updated company profile information.`);
+
+    // UI feedback
+    alert('Company profile updated successfully!');
+
+    // Render UI changes
+    renderApp();
+
+    // FINAL SAVE — captures everything above
+    autoSave();
+}
+
+        function printReport() {
+            // This will trigger the browser's print dialog, using the @media print styles to format the output.
+            window.print();
         }
         
         function renderMainContent() {
@@ -2907,6 +3923,12 @@
             loadPreferences();
             await loadData();
             renderApp();
+
+            window.addEventListener("message", event => {
+                if (event.data === "force-save") {
+                    saveData();
+                }
+            });
         });
     </script>
 </body>
