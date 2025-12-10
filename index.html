@@ -86,7 +86,7 @@
             --sidebar-bg: #6b21a8;
         }
 
-        * {
+tion        * {
             --tw-bg-opacity: 1;
             --tw-text-opacity: 1;
         }
@@ -878,11 +878,14 @@
             editingPRId: null, // To track which PR is being edited
             viewingOrderId: null, // To track which order is being viewed in detail
             editingInventoryId: null, // To track which inventory item is being edited
+            inventorySearchQuery: '', // To hold the search query for the inventory page
+            showFullDailyRecord: false, // For PR daily records
+            dailyRecordViewDate: new Date(), // For PR daily records
             companyProfile: {
                 name: 'Silhouette Diagnostic Consultants',
-                address: 'No.12 Kudang street off monrovia street wuse2, opp Banex plaza, Abuja, Niheria',
+                address: 'No.12 Kudang street off monrovia street wuse2, opp Banex plaza, Abuja, Nigeria',
                 email: 'contact@silhouettediagnostics.com',
-                contact: '+234-801-234-5678',
+                contact: '+234-903-000-2653',
                 logo: 'company icon.png' // Default logo/icon
             },
             theme: 'light', // light or dark
@@ -907,17 +910,34 @@
                 date: '',
                 month: '',
                 year: '',
-                time: '',
-                filterType: 'all',
+                time: ''
+,
+                filterType: 'all'
+                ,
                 searchQuery: '' // For patient name/PID search
             }
+        }; 
+        appState.analyticsDateRange = {
+            start: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0],
+            end: new Date().toISOString().split('T')[0]
         };
+
+        appState.showFullDailyTestRecord = false;
+        appState.dailyTestRecordViewDate = new Date();
+        appState.historySearchQuery = '';
+        appState.recordsViewDate = new Date(); // Add this for the records page pagination
 
         // VIP form mode to allow manual price overrides for selected services
         // NOTE: stored on appState so render() can pick it up
         // (we'll use `appState.vipMode` elsewhere)
         // add below to keep object shape consistent
         // (this will be moved into the main object in the next patch if needed)
+
+        // Add pagination state for analytics tables
+        appState.analytics = {
+            prPerformancePage: 0,
+            historyPage: 0
+        };
 
         // Users - Initially empty; to be managed by admin in production
         let users = [];
@@ -1595,9 +1615,44 @@ async function loadData() {
             return stats;
         }
 
+        function getFilteredStats() {
+            const { start, end } = appState.analyticsDateRange;
+            const startDate = new Date(start);
+            const endDate = new Date(end);
+
+            const filteredOrders = orders.filter(order => {
+                const orderDate = new Date(order.date);
+                return orderDate >= startDate && orderDate <= endDate;
+            });
+
+            const totalRevenue = filteredOrders.reduce((sum, order) => sum + order.total, 0);
+            return { totalRevenue, orderCount: filteredOrders.length };
+        }
+
         function getTopTests() {
             const testCount = {};
             orders.forEach(order => {
+                order.services.forEach(service => {
+                    const name = (typeof service === 'string') ? service : (service && service.name ? service.name : 'Unknown');
+                    testCount[name] = (testCount[name] || 0) + 1;
+                });
+            });
+            return Object.entries(testCount)
+                .map(([name, count]) => ({ name, count }))
+                .sort((a, b) => b.count - a.count)
+                .slice(0, 5);
+        }
+
+        function getFilteredTopTests() {
+            const { start, end } = appState.analyticsDateRange;
+            const startDate = new Date(start);
+            const endDate = new Date(end);
+
+            const testCount = {};
+            orders.filter(order => {
+                const orderDate = new Date(order.date);
+                return orderDate >= startDate && orderDate <= endDate;
+            }).forEach(order => {
                 order.services.forEach(service => {
                     const name = (typeof service === 'string') ? service : (service && service.name ? service.name : 'Unknown');
                     testCount[name] = (testCount[name] || 0) + 1;
@@ -1621,8 +1676,7 @@ async function loadData() {
 
             return Object.entries(prStats)
                 .map(([name, stats]) => ({ name, ...stats }))
-                .sort((a, b) => b.revenue - a.revenue)
-                .slice(0, 5);
+                .sort((a, b) => b.revenue - a.revenue);
         }
 
         function getPaymentStats() {
@@ -1633,11 +1687,73 @@ async function loadData() {
             return stats;
         }
 
+        function getFilteredPRPerformance() {
+            const { start, end } = appState.analyticsDateRange;
+            const startDate = new Date(start);
+            const endDate = new Date(end);
+
+            const prStats = {};
+            orders.filter(order => {
+                const orderDate = new Date(order.date);
+                return orderDate >= startDate && orderDate <= endDate;
+            }).forEach(order => {
+                if (!prStats[order.referredBy]) prStats[order.referredBy] = { orders: 0, revenue: 0 };
+                prStats[order.referredBy].orders++;
+                prStats[order.referredBy].revenue += order.total;
+            });
+
+            return Object.entries(prStats)
+                .map(([name, stats]) => ({ name, ...stats }))
+                .sort((a, b) => b.revenue - a.revenue);
+        }
+
+        function getDailyPRPerformance(date) {
+            const dateString = date.toISOString().split('T')[0];
+            const prStats = {};
+            orders.filter(order => new Date(order.date).toISOString().split('T')[0] === dateString)
+                .forEach(order => {
+                    if (order.referredBy && order.referredBy !== 'Not Specified') {
+                        if (!prStats[order.referredBy]) {
+                            prStats[order.referredBy] = { orders: 0, revenue: 0 };
+                        }
+                        prStats[order.referredBy].orders += 1;
+                        prStats[order.referredBy].revenue += order.total;
+                    }
+                });
+
+            return Object.entries(prStats)
+                .map(([name, stats]) => ({ name, ...stats }))
+                .sort((a, b) => b.orders - a.orders); // Sort by number of referrals
+        }
+
+        function getDailyTopTests(date) {
+            const dateString = date.toISOString().split('T')[0];
+            const testCount = {};
+            orders.filter(order => new Date(order.date).toISOString().split('T')[0] === dateString)
+                .forEach(order => {
+                    order.services.forEach(service => {
+                        const name = (typeof service === 'string') ? service : (service && service.name ? service.name : 'Unknown');
+                        testCount[name] = (testCount[name] || 0) + 1;
+                    });
+                });
+
+            return Object.entries(testCount)
+                .map(([name, count]) => ({ name, count }))
+                .sort((a, b) => b.count - a.count);
+        }
+
+
         function getFilteredRecords() {
             const filters = appState.recordFilters;
-            let filtered = [...orders];
+            const viewDate = new Date(appState.recordsViewDate).toISOString().split('T')[0];
 
-            // 1. Apply search query first
+            // 1. Filter by the selected day first
+            let filtered = orders.filter(order => {
+                const orderDate = new Date(order.date).toISOString().split('T')[0];
+                return orderDate === viewDate;
+            });
+
+            // 2. Apply search query on the daily records
             if (filters.searchQuery) {
                 const query = filters.searchQuery.toLowerCase();
                 filtered = filtered.filter(order => 
@@ -1645,26 +1761,7 @@ async function loadData() {
                     order.pid.toLowerCase().includes(query)
                 );
             }
-            
-            // 2. Apply date/time filters on the already searched results
-            return filtered.filter(order => {
-                const orderDate = new Date(order.date); // Ensure we are working with a Date object
-                if (filters.filterType === 'day' && filters.date) {
-                    if (orderDate.toISOString().split('T')[0] !== filters.date) return false;
-                }
-                if (filters.filterType === 'month' && filters.month) {
-                    const orderMonth = orderDate.toISOString().substring(0, 7);
-                    if (orderMonth !== filters.month) return false;
-                }
-                if (filters.filterType === 'year' && filters.year) {
-                    const orderYear = orderDate.getFullYear().toString();
-                    if (orderYear !== filters.year) return false;
-                }
-                if (filters.filterType === 'time' && filters.time) {
-                    if (!order.time || !order.time.startsWith(filters.time.split(':')[0])) return false;
-                }
-                return true;
-            });
+            return filtered;
         }
 
         function exportToCSV() {
@@ -1735,24 +1832,25 @@ async function loadData() {
         function renderSidebar() {
             const collapsed = appState.sidebarCollapsed;
             const isAdmin = appState.currentUser && appState.currentUser.role === 'Admin';
+            const canAccessPRAndAnalytics = appState.currentUser && (appState.currentUser.role === 'Admin' || appState.currentUser.role === 'Staff');
 
             return `
                 <div class="sidebar ${collapsed ? 'collapsed' : ''}">
                     <div class="sidebar-header">
                         <div class="sidebar-logo">SDC</div>
                         <button class="sidebar-toggle" onclick="toggleSidebar()">
-                            ${collapsed ? '→' : '←'}
+                            ${collapsed ? '&#8594;' : '&#8592;'}
                         </button>
                     </div>
                     
                     <nav class="sidebar-nav">
                         <div class="nav-item ${appState.currentView === 'dashboard' ? 'active' : ''}" onclick="navigateTo('dashboard')">
-                            <div class="nav-item-icon">📊</div>
+                            <div class="nav-item-icon">&#128202;</div>
                             <div class="nav-item-label">Dashboard</div>
                         </div>
                         
                         <div class="nav-item ${appState.currentView === 'billing' ? 'active' : ''}" onclick="navigateTo('billing')">
-                            <div class="nav-item-icon">📋</div>
+                            <div class="nav-item-icon">&#128203;</div>
                             <div class="nav-item-label">Billing</div>
                         </div>
                         
@@ -1761,24 +1859,25 @@ async function loadData() {
                             <div class="nav-item-label">Inventory</div>
                         </div>
                         
-                        ${isAdmin ? `
+                        ${canAccessPRAndAnalytics ? `
                         <div class="nav-item ${appState.currentView === 'pr-management' ? 'active' : ''}" onclick="navigateTo('pr-management')">
-                            <div class="nav-item-icon">👥</div>
+                            <div class="nav-item-icon">&#128101;</div>
                             <div class="nav-item-label">PR Management</div>
                         </div>
                         
                         <div class="nav-item ${appState.currentView === 'analytics' ? 'active' : ''}" onclick="navigateTo('analytics')">
-                            <div class="nav-item-icon">📈</div>
+                            <div class="nav-item-icon">&#128200;</div>
                             <div class="nav-item-label">Analytics</div>
                         </div>
-
+                        ` : ''}
+                        ${isAdmin ? `
                         <div class="nav-item ${appState.currentView === 'history' ? 'active' : ''}" onclick="navigateTo('history')">
-                            <div class="nav-item-icon">📜</div>
+                            <div class="nav-item-icon">&#128220;</div>
                             <div class="nav-item-label">History</div>
                         </div>
 
                         <div class="nav-item ${appState.currentView === 'staff-management' ? 'active' : ''}" onclick="navigateTo('staff-management')">
-                            <div class="nav-item-icon">🧑‍💼</div>
+                            <div class="nav-item-icon">&#129489;&zwj;&#128188;</div>
                             <div class="nav-item-label">Staff Management</div>
                         </div>
                         ` : ''}
@@ -1790,14 +1889,14 @@ async function loadData() {
                         
                         <!-- Added settings nav item -->
                         <div class="nav-item ${appState.currentView === 'settings' ? 'active' : ''}" onclick="navigateTo('settings')">
-                            <div class="nav-item-icon">⚙️</div>
+                            <div class="nav-item-icon">&#9881;&#65039;</div>
                             <div class="nav-item-label">Settings</div>
                         </div>
                     </nav>
                     
                     <div class="sidebar-footer">
                         <button class="nav-item" onclick="logout()" style="width: 100%; justify-content: center; background-color: rgba(239, 68, 68, 0.2); color: #fecaca;">
-                            <div class="nav-item-icon">🚪</div>
+                            <div class="nav-item-icon">&#128682;</div>
                             <div class="nav-item-label">Logout</div>
                         </button>
                     </div>
@@ -1818,7 +1917,7 @@ async function loadData() {
                             <div id="header-date" style="font-size: 0.8rem; opacity: 0.9;"></div>
                         </div>
                         <div class="header-user">
-                            <span>👤 ${appState.currentUser.fullName}</span>
+                            <span>&#128100; ${appState.currentUser.fullName}</span>
                         </div>
                     </div>
                 </div>
@@ -1910,42 +2009,43 @@ async function loadData() {
         function renderDashboard() {
             return `
                 <div style="max-width: 1400px; margin: 0 auto;">
-                    <h2 style="font-size: 2rem; font-weight: 700; margin-bottom: 2rem;">Welcome, ${appState.currentUser.fullName}! 👋</h2>
+                    <h2 style="font-size: 2rem; font-weight: 700; margin-bottom: 2rem;">Welcome, ${appState.currentUser.fullName}! &#128075;</h2>
 
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
                         <div class="quick-card animate-slide-in" style="animation-delay: 0s;" onclick="navigateTo('billing')">
-                            <div style="font-size: 2rem; margin-bottom: 0.5rem;">📝</div>
+                            <div style="font-size: 2rem; margin-bottom: 0.5rem;">&#128221;</div>
                             <div style="font-weight: 600; margin-bottom: 0.25rem;">New Patient Entry</div>
                             <div style="font-size: 0.875rem; opacity: 0.9;">Start billing process</div>
                         </div>
 
                         <div class="quick-card animate-slide-in" style="animation-delay: 0.1s;" onclick="navigateTo('records')">
-                            <div style="font-size: 2rem; margin-bottom: 0.5rem;">📁</div>
+                            <div style="font-size: 2rem; margin-bottom: 0.5rem;">&#128194;</div>
                             <div style="font-weight: 600; margin-bottom: 0.25rem;">Patient Records</div>
                             <div style="font-size: 0.875rem; opacity: 0.9;">View historical data</div>
                         </div>
 
                         <div class="quick-card accent animate-slide-in" style="animation-delay: 0.2s;" onclick="navigateTo('inventory')">
-                            <div style="font-size: 2rem; margin-bottom: 0.5rem;">🧪</div>
+                            <div style="font-size: 2rem; margin-bottom: 0.5rem;">&#129514;</div>
                             <div style="font-weight: 600; margin-bottom: 0.25rem;">Inventory</div>
                             <div style="font-size: 0.875rem; opacity: 0.9;">View available tests</div>
                         </div>
 
-                        ${appState.currentUser.role === 'Admin' ? `
+                        ${(appState.currentUser.role === 'Admin' || appState.currentUser.role === 'Staff') ? `
                         <div class="quick-card animate-slide-in" style="animation-delay: 0.3s;" onclick="navigateTo('pr-management')">
-                            <div style="font-size: 2rem; margin-bottom: 0.5rem;">👥</div>
+                            <div style="font-size: 2rem; margin-bottom: 0.5rem;">&#128101;</div>
                             <div style="font-weight: 600; margin-bottom: 0.25rem;">PR Management</div>
                             <div style="font-size: 0.875rem; opacity: 0.9;">Manage professionals</div>
                         </div>
 
                         <div class="quick-card animate-slide-in" style="animation-delay: 0.4s;" onclick="navigateTo('analytics')">
-                            <div style="font-size: 2rem; margin-bottom: 0.5rem;">📊</div>
+                            <div style="font-size: 2rem; margin-bottom: 0.5rem;">&#128202;</div>
                             <div style="font-weight: 600; margin-bottom: 0.25rem;">Analytics</div>
                             <div style="font-size: 0.875rem; opacity: 0.9;">View reports & insights</div>
                         </div>
-
+                        ` : ''}
+                        ${appState.currentUser.role === 'Admin' ? `
                         <div class="quick-card accent animate-slide-in" style="animation-delay: 0.5s;" onclick="navigateTo('staff-management')">
-                            <div style="font-size: 2rem; margin-bottom: 0.5rem;">🧑‍💼</div>
+                            <div style="font-size: 2rem; margin-bottom: 0.5rem;">&#129489;&zwj;&#128188;</div>
                             <div style="font-weight: 600; margin-bottom: 0.25rem;">Staff Management</div>
                             <div style="font-size: 0.875rem; opacity: 0.9;">Add or remove staff</div>
                         </div>
@@ -1954,14 +2054,18 @@ async function loadData() {
 
                     <div class="card animate-fade-in">
                         <h3 style="font-weight: 700; margin-bottom: 1rem; font-size: 1.125rem;">Quick Stats</h3>
-                        <div class="grid-2">
+                        <div class="grid-3">
                             <div style="padding: 1rem; background-color: var(--background); border-radius: 0.5rem;">
                                 <p style="color: var(--text-secondary); font-size: 0.875rem;">Total Orders</p>
                                 <p style="font-size: 1.75rem; font-weight: 700; color: var(--primary);">${orders.length}</p>
                             </div>
                             <div style="padding: 1rem; background-color: var(--background); border-radius: 0.5rem;">
-                                <p style="color: var(--text-secondary); font-size: 0.875rem;">Paid Orders</p>
+                                <p style="color: var(--text-secondary); font-size: 0.875rem;">Full Payments</p>
                                 <p style="font-size: 1.75rem; font-weight: 700; color: var(--success);">${orders.filter(o => o.status === 'PAID').length}</p>
+                            </div>
+                            <div style="padding: 1rem; background-color: var(--background); border-radius: 0.5rem;">
+                                <p style="color: var(--text-secondary); font-size: 0.875rem;">Installmental Payments</p>
+                                <p style="font-size: 1.75rem; font-weight: 700; color: var(--warning);">${orders.filter(o => o.paymentStatus === 'installment').length}</p>
                             </div>
                         </div>
                     </div>
@@ -1992,7 +2096,7 @@ async function loadData() {
                     </div>
 
                     <!-- Step 1: Patient Details -->
-                    <div id="step1" class="${appState.billingStep !== 1 ? 'hidden' : ''} animate-slide-up">
+                    <div id="step1" style="display: ${appState.billingStep === 1 ? 'block' : 'none'}" class="animate-slide-up">
                         <div class="card">
                             <h3 style="font-weight: 700; margin-bottom: 1.5rem; font-size: 1.25rem;">Patient Information</h3>
 
@@ -2016,7 +2120,7 @@ async function loadData() {
                                 <div class="form-group">
                                     <label class="form-label">Referred By</label>
                                     <div style="position:relative;">
-                                        <input type="text" id="referredBySearch" class="form-input" placeholder="Type PR agent name..." value="${appState.billingData.referredBy || ''}" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:0.25rem; font-size:1rem;" />
+                                        <input type="text" id="referredBySearch" class="form-input" placeholder="Type PR agent name..." value="${appState.billingData.referredBy || ''}" />
                                         <div id="prSuggestions" style="position:absolute; top:100%; left:0; right:0; background:var(--background); border:1px solid var(--border); border-top:none; max-height:200px; overflow-y:auto; z-index:100; display:none; border-radius:0 0 0.25rem 0.25rem;"></div>
                                     </div>
                                     <div id="addPRAgentContainer" style="margin-top:0.5rem; display:none;">
@@ -2025,7 +2129,7 @@ async function loadData() {
                                 </div>
                                 <div class="form-group">
                                     <label class="form-label">Staff Name *</label>
-                                    <input type="text" id="staffName" class="form-input" placeholder="Your name" value="${appState.billingData.staffName}" />
+                                    <input type="text" id="staffName" class="form-input" placeholder="Your name" value="${appState.currentUser.fullName}" readonly />
                                 </div>
                             </div>
 
@@ -2036,7 +2140,7 @@ async function loadData() {
                     </div>
 
                     <!-- Step 2: Services Selection -->
-                    <div id="step2" class="${appState.billingStep !== 2 ? 'hidden' : ''} animate-slide-up">
+                    <div id="step2" style="display: ${appState.billingStep === 2 ? 'block' : 'none'}" class="animate-slide-up">
                         <div class="card">
                             <h3 style="font-weight: 700; margin-bottom: 1.5rem; font-size: 1.25rem;">Select Services</h3>
 
@@ -2105,7 +2209,7 @@ async function loadData() {
                     </div>
 
                     <!-- Step 3: Finalize Payment -->
-                    <div id="step3" class="${appState.billingStep !== 3 ? 'hidden' : ''} animate-pop">
+                    <div id="step3" style="display: ${appState.billingStep === 3 ? 'block' : 'none'}" class="animate-pop">
                         <div class="card">
                             <h3 style="font-weight: 700; margin-bottom: 1.5rem; font-size: 1.25rem;">Payment Information</h3>
 
@@ -2254,12 +2358,16 @@ async function loadData() {
             `;
         }
         function renderInventory() {
+            const searchQuery = appState.inventorySearchQuery.toLowerCase();
+            const filteredInventory = inventory.filter(item => 
+                item.name.toLowerCase().includes(searchQuery) || 
+                item.category.toLowerCase().includes(searchQuery));
             return `
                 <div style="max-width: 1200px; margin: 0 auto;" class="animate-slide-up">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
                         <h2 style="font-size: 2rem; font-weight: 700;">Inventory & Test Pricing</h2>
                         ${appState.currentUser.role === 'Admin' ? `
-                            <button onclick="toggleAddInventoryForm()" class="btn-primary">
+                            <button onclick="toggleAddInventoryForm()" class="btn-primary"> 
                                 ${appState.showAddInventoryForm ? '× Cancel' : '+ Add New Test'}
                             </button>
                         ` : ''}
@@ -2283,11 +2391,18 @@ async function loadData() {
                                     <input type="number" id="newInventoryPrice" class="form-input" placeholder="e.g., 2500">
                                 </div>
                             </div>
-                            <button onclick="addNewInventoryItem()" class="btn-primary" style="margin-top: 1rem;">✓ Save Item</button>
+                            <button onclick="addNewInventoryItem()" class="btn-primary" style="margin-top: 1rem;">&#10003; Save Item</button>
                         </div>
                     ` : ''}
 
                     <div class="card">
+                        <!-- Search Bar -->
+                        <div class="form-group" style="margin-bottom: 2rem;">
+                            <label class="form-label">Search for a Test or Service</label>
+                            <input type="text" id="inventorySearch" class="form-input" placeholder="Type to search..." value="${appState.inventorySearchQuery}" oninput="appState.inventorySearchQuery = this.value; renderApp();">
+                        </div>
+
+
                         <table class="table">
                             <thead>
                                 <tr>
@@ -2299,7 +2414,7 @@ async function loadData() {
                             </thead>
                             <tbody>
                                 ${(() => {
-                                    const groups = inventory.reduce((acc, s) => {
+                                    const groups = filteredInventory.reduce((acc, s) => {
                                         if (!acc[s.category]) acc[s.category] = [];
                                         acc[s.category].push(s);
                                         return acc;
@@ -2325,7 +2440,7 @@ async function loadData() {
                                                     <td><strong>${item.name}</strong></td>
                                                     <td><span class="badge badge-primary">${item.category}</span></td>
                                                     <td style="font-weight: 700; color: var(--primary); text-align: right;">${formatCurrency(item.price)}</td>
-                                                    ${appState.currentUser.role === 'Admin' ? `<td style="white-space: nowrap; display: flex; gap: 0.5rem;"><button onclick="toggleEdit('inventory', ${item.id})" class="btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">✏️ Edit</button><button onclick="deleteInventoryItem(${item.id})" class="btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.8rem; color: var(--error);">🗑️ Delete</button></td>` : ''}
+                                                    ${appState.currentUser.role === 'Admin' ? `<td style="white-space: nowrap; display: flex; gap: 0.5rem;"><button onclick="toggleEdit('inventory', ${item.id})" class="btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">&#9998;&#65039; Edit</button><button onclick="deleteInventoryItem(${item.id})" class="btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.8rem; color: var(--error);">&#128465;&#65039; Delete</button></td>` : ''}
                                                 </tr>
                                             `;
                                         }).join('')}
@@ -2343,15 +2458,15 @@ async function loadData() {
         }
 
         function renderPRManagement() {
-            if (appState.currentUser.role !== 'Admin') {
-                return `<div class="card"><p>Access Denied: Only admins can manage PR</p></div>`;
+            if (appState.currentUser.role !== 'Admin' && appState.currentUser.role !== 'Staff') {
+                return `<div class="card"><p>Access Denied: You do not have permission to manage PR.</p></div>`;
             }
 
             return `
                 <div style="max-width: 1200px; margin: 0 auto;" class="animate-slide-up">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
                         <h2 style="font-size: 2rem; font-weight: 700;">PR Management</h2>
-                        <button onclick="toggleAddPRForm()" class="btn-primary">
+                        <button onclick="toggleAddPRForm()" class="btn-primary"> 
                             ${appState.showAddPRForm ? '× Cancel' : '+ Add New PR'}
                         </button>
                     </div>
@@ -2370,7 +2485,7 @@ async function loadData() {
                                     <input type="tel" id="newPRPhone" class="form-input" placeholder="e.g., 0803 123 4567">
                                 </div>
                             </div>
-                            <button onclick="addNewPR()" class="btn-primary" style="margin-top: 1rem;">✓ Save Professional</button>
+                            <button onclick="addNewPR()" class="btn-primary" style="margin-top: 1rem;">&#10003; Save Professional</button>
                         </div>
                     ` : ''}
 
@@ -2380,7 +2495,7 @@ async function loadData() {
                                 <tr>
                                     <th>PR Name</th>
                                     <th>Contact Phone</th>
-                                    <th style="text-align: right;">Actions</th>
+                                    <th style="text-align: right;">Actions</th> 
                                 </tr>
                             </thead>
                             <tbody>
@@ -2400,9 +2515,9 @@ async function loadData() {
                                         <tr>
                                             <td><strong>${pr.name}</strong></td>
                                             <td>${pr.phone}</td>
-                                            <td style="text-align: right; white-space: nowrap; display: flex; gap: 0.5rem; justify-content: flex-end;">
-                                                <button onclick="toggleEdit('pr', ${pr.id})" class="btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">✏️ Edit</button>
-                                                <button onclick="deletePR(${pr.id})" class="btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.8rem; color: var(--error);">🗑️ Delete</button>
+                                            <td style="text-align: right; white-space: nowrap; display: flex; gap: 0.5rem; justify-content: flex-end;"> 
+                                                <button onclick="toggleEdit('pr', ${pr.id})" class="btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">&#9998;&#65039; Edit</button>
+                                                <button onclick="deletePR(${pr.id})" class="btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.8rem; color: var(--error);">&#128465;&#65039; Delete</button>
                                             </td>
                                         </tr>
                                     `;
@@ -2419,41 +2534,69 @@ async function loadData() {
         }
 
         function renderAnalytics() {
+            if (appState.currentUser.role !== 'Admin' && appState.currentUser.role !== 'Staff') {
+                return `<div class="card"><p>Access Denied: You do not have permission to view analytics.</p></div>`;
+            }
+
             const stats = getOrderStats();
-            const topTests = getTopTests();
-            const prPerformance = getPRPerformance();
+            const topTests = getFilteredTopTests();
+            const filteredStats = getFilteredStats();
+            const prPerformance = getFilteredPRPerformance();
             const paymentStats = getPaymentStats();
             const isAdmin = appState.currentUser.role === 'Admin';
 
             return `
+                <div id="printable-area" style="display: none;">
+                    <!-- This is a hidden container for the full printable report -->
+                    <!-- The content will be dynamically generated by printReport() -->
+                </div>
+
                 <div style="max-width: 1400px; margin: 0 auto;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
                         <h2 style="font-size: 2rem; font-weight: 700;">Analytics & Reports</h2>
-                        <button onclick="printReport()" class="btn-primary">🖨️ Print Report</button>
+                        <button onclick="printReport()" class="btn-primary">&#128424;&#65039; Print Report</button>
+                    </div>
+
+                    <!-- Date Range Filter for Analytics -->
+                    <div class="card animate-slide-up" style="margin-bottom: 2rem;">
+                        <h3 style="font-weight: 700; margin-bottom: 1rem;">Filter by Date Range</h3>
+                        <div class="filter-section">
+                            <div class="filter-group">
+                                <label>Start Date</label>
+                                <input type="date" id="analyticsStartDate" value="${appState.analyticsDateRange.start}" onchange="updateAnalyticsDateRange('start', this.value)">
+                            </div>
+                            <div class="filter-group">
+                                <label>End Date</label>
+                                <input type="date" id="analyticsEndDate" value="${appState.analyticsDateRange.end}" onchange="updateAnalyticsDateRange('end', this.value)">
+                            </div>
+                            <div class="filter-group">
+                                <button onclick="resetAnalyticsDateRange()">Reset to Last 30 Days</button>
+                            </div>
+                        </div>
                     </div>
 
                     <div id="printable-area">
-                    <!-- Key Financial Metrics -->
+                    <!-- Key Financial Metrics (Visible on screen) -->
                     <div class="stat-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
                         <div class="stat-box animate-slide-up" style="border-left: 4px solid var(--success); animation-delay: 0s;">
-                            <p class="stat-label">Total Revenue (YTD)</p>
-                            <p class="stat-value" style="color: var(--success);">${formatCurrency(stats.totalRevenue)}</p>
-                            <p style="font-size: 0.75rem; color: var(--text-secondary);">${stats.paidOrders} orders completed</p>
+                            <p class="stat-label">Total Income (Selected Period)</p>
+                            <p class="stat-value" style="color: var(--success);">${formatCurrency(filteredStats.totalRevenue)}</p>
+                            <p style="font-size: 0.75rem; color: var(--text-secondary);">${filteredStats.orderCount} orders in period</p>
                         </div>
                         <div class="stat-box animate-slide-up" style="border-left: 4px solid var(--warning); animation-delay: 0.1s;">
-                            <p class="stat-label">Outstanding Balance</p>
+                            <p class="stat-label">Outstanding Balance (All Time)</p>
                             <p class="stat-value" style="color: var(--warning);">${formatCurrency(stats.pendingBalance)}</p>
                             <p style="font-size: 0.75rem; color: var(--text-secondary);">Awaiting payment</p>
                         </div>
                         <div class="stat-box animate-slide-up" style="border-left: 4px solid var(--primary); animation-delay: 0.2s;">
-                            <p class="stat-label">Average Value</p>
-                            <p class="stat-value">${formatCurrency(stats.totalOrders > 0 ? (stats.totalRevenue + stats.pendingBalance) / stats.totalOrders : 0)}</p>
-                            <p style="font-size: 0.75rem; color: var(--text-secondary);">Per patient</p>
+                            <p class="stat-label">Total Revenue (All Time)</p>
+                            <p class="stat-value">${formatCurrency(stats.totalRevenue)}</p>
+                            <p style="font-size: 0.75rem; color: var(--text-secondary);">${stats.paidOrders} completed orders</p>
                         </div>
                         <div class="stat-box accent animate-slide-up" style="border-left: 4px solid var(--accent); animation-delay: 0.3s;">
-                            <p class="stat-label">Total Orders</p>
-                            <p class="stat-value">${stats.totalOrders}</p>
-                            <p style="font-size: 0.75rem; color: var(--text-secondary);">All orders</p>
+                            <p class="stat-label">Average Order Value (All Time)</p>
+                            <p class="stat-value">${formatCurrency(stats.totalOrders > 0 ? (stats.totalRevenue + stats.pendingBalance) / stats.totalOrders : 0)}</p>
+                            <p style="font-size: 0.75rem; color: var(--text-secondary);">Per patient</p>
                         </div>
                     </div>
 
@@ -2480,49 +2623,121 @@ async function loadData() {
                         </div>
                     </div>
 
-                    <!-- PR Performance -->
+                    <!-- Daily PR Performance -->
                     <div class="card animate-slide-up" style="margin-top: 2rem;">
-                        <h3 style="font-weight: 700; margin-bottom: 1.5rem; font-size: 1.25rem;">Top Referring Professionals</h3>
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th>Rank</th>
-                                    <th>PR Name</th>
-                                    <th>Total Orders</th>
-                                    <th>Revenue Generated</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${prPerformance.map((pr, idx) => `
-                                    <tr>
-                                        <td><strong>#${idx + 1}</strong></td>
-                                        <td>${pr.name}</td>
-                                        <td><span class="badge badge-primary">${pr.orders}</span></td>
-                                        <td style="font-weight: 700; color: var(--success);">${formatCurrency(pr.revenue)}</td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                            <h3 style="font-weight: 700; font-size: 1.25rem; margin: 0;">Top PR Agents by Referrals (Today)</h3>
+                        </div>
+                        <div class="responsive-table-wrapper">
+                            <table class="table">
+                                <thead>
+                                    <tr><th>PR Agent Name</th><th>Number of Referrals</th><th>Total Revenue</th></tr>
+                                </thead>
+                                <tbody>
+                                    ${(() => {
+                                        const todaysPerformance = getDailyPRPerformance(new Date()).slice(0, 5);
+                                        if (todaysPerformance.length === 0) {
+                                            return `<tr><td colspan="3" style="text-align: center; color: var(--text-secondary); padding: 1rem;">No PR referrals recorded for today yet.</td></tr>`;
+                                        }
+                                        return todaysPerformance.map(pr => `
+                                            <tr>
+                                                <td><strong>${pr.name}</strong></td>
+                                                <td>${pr.orders}</td>
+                                                <td>${formatCurrency(pr.revenue)}</td>
+                                            </tr>
+                                        `).join('');
+                                    })()}
+                                </tbody>
+                            </table>
+                        </div>
+                        <button onclick="toggleFullDailyRecord()" class="btn-secondary" style="margin-top: 1.5rem;">
+                            ${appState.showFullDailyRecord ? 'Hide Daily PR Report' : 'View Full Daily PR Report'}
+                        </button>
+
+                        ${appState.showFullDailyRecord ? `
+                            <div class="animate-fade-in" style="border-top: 1px solid var(--border); margin-top: 1.5rem; padding-top: 1.5rem;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                    <h4 style="font-weight: 600; font-size: 1.125rem;">Full PR Referral Report for: ${appState.dailyRecordViewDate.toLocaleDateString('en-CA')}</h4>
+                                    <div style="display: flex; gap: 0.5rem;">
+                                        <button class="btn-secondary" onclick="changeDailyRecordDate(-1)">&#8592; Previous Day</button>
+                                        <button class="btn-secondary" onclick="changeDailyRecordDate(1)" ${new Date(appState.dailyRecordViewDate).setHours(0,0,0,0) >= new Date().setHours(0,0,0,0) ? 'disabled' : ''}>Next Day &#8594;</button>
+                                    </div>
+                                </div>
+                                <div class="responsive-table-wrapper">
+                                    <table class="table">
+                                        <thead><tr><th>PR Agent Name</th><th>Number of Referrals</th><th>Total Revenue</th></tr></thead>
+                                        <tbody>
+                                            ${(() => {
+                                                const dailyPerformance = getDailyPRPerformance(appState.dailyRecordViewDate);
+                                                if (dailyPerformance.length === 0) return `<tr><td colspan="3" style="text-align: center; color: var(--text-secondary); padding: 1rem;">No PR referrals for this day.</td></tr>`;
+                                                return dailyPerformance.map(pr => `
+                                                    <tr>
+                                                        <td><strong>${pr.name}</strong></td>
+                                                        <td>${pr.orders}</td>
+                                                        <td>${formatCurrency(pr.revenue)}</td>
+                                                    </tr>
+                                                `).join('');
+                                            })()}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        ` : ''}
                     </div>
 
-                    <!-- Top Tests -->
+                    <!-- Daily Top Tests -->
                     <div class="card animate-slide-up" style="margin-top: 2rem;">
-                        <h3 style="font-weight: 700; margin-bottom: 1.5rem; font-size: 1.25rem;">Top 5 Most Ordered Tests</h3>
-                        <div class="chart-container">
-                            ${topTests.map(test => {
-                                const maxCount = topTests[0]?.count || 1;
-                                return `
-                                    <div class="chart-item">
-                                        <div class="chart-label">${test.name}</div>
-                                        <div class="chart-bar-container">
-                                            <div class="chart-bar" style="width: ${(test.count / maxCount) * 100}%;">
-                                                ${test.count}
-                                            </div>
-                                        </div>
-                                    </div>
-                                `;
-                            }).join('')}
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                            <h3 style="font-weight: 700; font-size: 1.25rem; margin: 0;">Top 5 Most Ordered Tests (Today)</h3>
                         </div>
+                        <div class="responsive-table-wrapper">
+                            <table class="table">
+                                <thead>
+                                    <tr><th>Test Name</th><th>Times Ordered</th></tr>
+                                </thead>
+                                <tbody>
+                                    ${(() => {
+                                        const todaysTopTests = getDailyTopTests(new Date()).slice(0, 5);
+                                        if (todaysTopTests.length === 0) {
+                                            return `<tr><td colspan="2" style="text-align: center; color: var(--text-secondary); padding: 1rem;">No tests recorded for today yet.</td></tr>`;
+                                        }
+                                        return todaysTopTests.map(test => `
+                                            <tr>
+                                                <td><strong>${test.name}</strong></td>
+                                                <td>${test.count}</td>
+                                            </tr>
+                                        `).join('');
+                                    })()}
+                                </tbody>
+                            </table>
+                        </div>
+                        <button onclick="toggleFullDailyTestRecord()" class="btn-secondary" style="margin-top: 1.5rem;">
+                            ${appState.showFullDailyTestRecord ? 'Hide Full Daily Test Record' : 'View Full Daily Test Record'}
+                        </button>
+
+                        ${appState.showFullDailyTestRecord ? `
+                            <div class="animate-fade-in" style="border-top: 1px solid var(--border); margin-top: 1.5rem; padding-top: 1.5rem;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                    <h4 style="font-weight: 600; font-size: 1.125rem;">Full Test Record for: ${appState.dailyTestRecordViewDate.toLocaleDateString('en-CA')}</h4>
+                                    <div style="display: flex; gap: 0.5rem;">
+                                        <button class="btn-secondary" onclick="changeDailyTestRecordDate(-1)">&#8592; Previous Day</button>
+                                        <button class="btn-secondary" onclick="changeDailyTestRecordDate(1)" ${new Date(appState.dailyTestRecordViewDate).setHours(0,0,0,0) >= new Date().setHours(0,0,0,0) ? 'disabled' : ''}>Next Day &#8594;</button>
+                                    </div>
+                                </div>
+                                <div class="responsive-table-wrapper">
+                                    <table class="table">
+                                        <thead><tr><th>Test Name</th><th>Times Ordered</th></tr></thead>
+                                        <tbody>
+                                            ${(() => {
+                                                const dailyTests = getDailyTopTests(appState.dailyTestRecordViewDate);
+                                                if (dailyTests.length === 0) return `<tr><td colspan="2" style="text-align: center; color: var(--text-secondary); padding: 1rem;">No tests recorded for this day.</td></tr>`;
+                                                return dailyTests.map(test => `<tr><td><strong>${test.name}</strong></td><td>${test.count}</td></tr>`).join('');
+                                            })()}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        ` : ''}
                     </div>
                     </div>
 
@@ -2530,7 +2745,7 @@ async function loadData() {
                     <div class="card animate-slide-up" style="margin-top: 2rem;">
                         <h3 style="font-weight: 700; margin-bottom: 1rem;">Data Export</h3>
                         <button onclick="exportData()" class="btn-primary ${!isAdmin ? 'disabled' : ''}" ${!isAdmin ? 'disabled' : ''}>
-                            📥 One-Click Data Export (CSV)
+                            &#128229; One-Click Data Export (CSV)
                         </button>
                         ${!isAdmin ? '<p style="margin-top: 0.5rem; font-size: 0.875rem; color: var(--text-secondary);">Only admins can export data</p>' : ''}
                     </div>
@@ -2577,7 +2792,7 @@ async function loadData() {
                                     <input type="password" id="newStaffPassword" class="form-input" placeholder="Minimum 6 characters">
                                 </div>
                             </div>
-                            <button onclick="addNewStaff()" class="btn-primary" style="margin-top: 1rem;">✓ Save Staff</button>
+                            <button onclick="addNewStaff()" class="btn-primary" style="margin-top: 1rem;">&#10003; Save Staff</button>
                         </div>
                     ` : ''}
 
@@ -2604,7 +2819,7 @@ async function loadData() {
                                             <td>${user.username}</td>
                                             <td><span class="badge badge-primary">${user.role}</span></td>
                                             <td>
-                                                <button onclick="deleteStaff('${user.username}')" class="btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.8rem; color: var(--error);">🗑️ Delete</button>
+                                                <button onclick="deleteStaff('${user.username}')" class="btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.8rem; color: var(--error);">&#128465;&#65039; Delete</button>
                                             </td>
                                         </tr>
                                     `).join('')}
@@ -2623,91 +2838,74 @@ async function loadData() {
                 <div style="max-width: 1400px; margin: 0 auto;">
                     <h2 style="font-size: 2rem; font-weight: 700; margin-bottom: 2rem;">Patient Records</h2>
 
-                    <!-- Added Filter Section -->
+                    <!-- Daily Record Navigation and Search -->
                     <div class="card animate-slide-up" style="margin-bottom: 2rem;">
-                        <h3 style="font-weight: 700; margin-bottom: 1rem;">Filter Records</h3>
-                        <div class="filter-section">
-                            <div class="filter-group" style="flex: 2;">
-                                <label>Search by Patient Name or PID</label>
-                                <input type="text" id="searchQuery" placeholder="Search..." value="${appState.recordFilters.searchQuery}" oninput="updateFilter('searchQuery', this.value)">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                            <h3 style="font-weight: 700; font-size: 1.25rem;">
+                                Records for: ${appState.recordsViewDate.toLocaleDateString('en-CA')}
+                            </h3>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <button class="btn-secondary" onclick="changeRecordsDate(-1)">&#8592; Previous Day</button>
+                                <button class="btn-secondary" onclick="changeRecordsDate(1)" ${new Date(appState.recordsViewDate).setHours(0,0,0,0) >= new Date().setHours(0,0,0,0) ? 'disabled' : ''}>Next Day &#8594;</button>
                             </div>
-                            <div class="filter-group">
-                                <label>Filter Type</label>
-                                <select id="filterType" onchange="updateFilterType(this.value)">
-                                    <option value="all">All Records</option>
-                                    <option value="day">By Day</option>
-                                    <option value="month">By Month</option>
-                                    <option value="year">By Year</option>
-                                    <option value="time">By Time</option>
-                                </select>
-                            </div>
-                            ${appState.recordFilters.filterType === 'day' ? `
-                                <div class="filter-group">
-                                    <label>Select Date</label>
-                                    <input type="date" id="filterDate" value="${appState.recordFilters.date}" onchange="updateFilter('date', this.value)">
-                                </div>
-                            ` : ''}
-                            ${appState.recordFilters.filterType === 'month' ? `
-                                <div class="filter-group">
-                                    <label>Select Month</label>
-                                    <input type="month" id="filterMonth" value="${appState.recordFilters.month}" onchange="updateFilter('month', this.value)">
-                                </div>
-                            ` : ''}
-                            ${appState.recordFilters.filterType === 'year' ? `
-                                <div class="filter-group">
-                                    <label>Select Year</label>
-                                    <input type="number" id="filterYear" placeholder="YYYY" value="${appState.recordFilters.year}" onchange="updateFilter('year', this.value)">
-                                </div>
-                            ` : ''}
-                            ${appState.recordFilters.filterType === 'time' ? `
-                                <div class="filter-group">
-                                    <label>Select Hour</label>
-                                    <input type="time" id="filterTime" value="${appState.recordFilters.time}" onchange="updateFilter('time', this.value)">
-                                </div>
-                            ` : ''}
-                            <div class="filter-group">
-                                <button onclick="clearFilters()">Clear Filters</button>
+                        </div>
+                        <div style="border-top: 1px solid var(--border); margin-top: 1.5rem; padding-top: 1.5rem;">
+                            <div class="form-group">
+                                <label class="form-label">Search within this day by Patient Name or PID</label>
+                                <input type="text" id="searchQuery" class="form-input" placeholder="Type to search..." value="${appState.recordFilters.searchQuery}" oninput="updateFilter('searchQuery', this.value)">
                             </div>
                         </div>
                     </div>
 
                     <div class="card animate-fade-in">
-                        <h3 style="font-weight: 700; margin-bottom: 1.5rem;">All Patient Records ${filteredRecords.length < orders.length ? `(${filteredRecords.length} of ${orders.length})` : ''}</h3>
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th>Patient Name</th>
-                                    <th>PID</th>
-                                    <th>Services</th>
-                                    <th>Total</th>
-                                    <th>Status</th>
-                                    <th>Referred By</th>
-                                    <th>Staff Name</th>
-                                    <th>Date</th>
-                                    <th>Time</th>
-                                    <th>Payment</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${filteredRecords.length > 0 ? filteredRecords.map(order => `
-                                    <tr>                                        <td><a href="#" onclick="viewOrderDetails(${order.id})" style="color: var(--primary); text-decoration: underline; font-weight: 500;">${order.patientName}</a></td>
-                                        <td><strong>${order.pid}</strong></td>
-                                        <td style="font-size: 0.85rem;">${order.services.map(s => (typeof s === 'string') ? s : (s && s.name ? s.name : '')).join(', ')}</td>
-                                        <td>${formatCurrency(order.total)}</td>
-                                        <td><span class="badge ${order.status === 'PAID' ? 'badge-success' : 'badge-warning'}">${order.status}</span></td>
-                                        <td style="font-size: 0.9rem;">${order.referredBy}</td>
-                                        <td style="font-weight: 500;">${order.staffName}</td>
-                                        <td>${order.date.toISOString().split('T')[0]}</td>
-                                        <td>${order.time || 'N/A'}</td>
-                                        <td><span class="badge ${order.paymentStatus === 'full' ? 'badge-full' : 'badge-installment'}">${order.paymentStatus === 'full' ? 'Full' : 'Installment'}</span></td>
-                                    </tr>
-                                `).join('') : `
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                            <h3 style="font-weight: 700; margin: 0;">
+                                Daily Log (${filteredRecords.length} record${filteredRecords.length !== 1 ? 's' : ''})
+                            </h3>
+                            <button onclick="printDailyRecords()" class="btn-primary" ${filteredRecords.length === 0 ? 'disabled' : ''}>
+                                &#128424;&#65039; Print Daily Record
+                            </button>
+                        </div>
+                        <div class="responsive-table-wrapper">
+                            <table class="table">
+                                <thead>
                                     <tr>
-                                        <td colspan="10" style="text-align: center; color: var(--text-secondary); padding: 2rem;">No records found for the selected filter.</td>
+                                        <th>Patient Name</th>
+                                        <th>PID</th>
+                                        <th>Services</th>
+                                        <th>Total</th>
+                                        <th>Status</th>
+                                        <th>Referred By</th>
+                                        <th>Staff Name</th>
+                                        <th>Date</th>
+                                        <th>Time</th>
+                                        <th>Payment</th>
+                                        <th>Actions</th>
                                     </tr>
-                                `}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    ${filteredRecords.length > 0 ? filteredRecords.map(order => `
+                                        <tr>
+                                            <td><a href="#" onclick="viewOrderDetails(${order.id})" style="color: var(--primary); text-decoration: underline; font-weight: 500;">${order.patientName}</a></td>
+                                            <td><strong>${order.pid}</strong></td>
+                                            <td style="font-size: 0.85rem;">${order.services.map(s => (typeof s === 'string') ? s : (s && s.name ? s.name : '')).join(', ')}</td>
+                                            <td>${formatCurrency(order.total)}</td>
+                                            <td><span class="badge ${order.status === 'PAID' ? 'badge-success' : 'badge-warning'}">${order.status}</span></td>
+                                            <td style="font-size: 0.9rem;">${order.referredBy}</td>
+                                            <td style="font-weight: 500;">${order.staffName}</td>
+                                            <td>${order.date.toISOString().split('T')[0]}</td>
+                                            <td>${order.time || 'N/A'}</td>
+                                            <td><span class="badge ${order.paymentStatus === 'full' ? 'badge-full' : 'badge-installment'}">${order.paymentStatus === 'full' ? 'Full' : 'Installment'}</span></td>
+                                            <td><button onclick="reprintReceiptById(${order.id})" class="btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">&#128424;&#65039; Print</button></td>
+                                        </tr>
+                                    `).join('') : `
+                                        <tr>
+                                            <td colspan="11" style="text-align: center; color: var(--text-secondary); padding: 2rem;">No records found for the selected filter.</td>
+                                        </tr>
+                                    `}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
 
                     <div style="margin-top: 1.5rem;">
@@ -2730,7 +2928,7 @@ async function loadData() {
                     <div class="card animate-pop" style="width: 90%; max-width: 650px; max-height: 90vh; overflow-y: auto;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
                             <h3 style="font-size: 1.5rem; font-weight: 700;">Record Details: ${order.pid}</h3>
-                            <button onclick="closeOrderDetails()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; line-height: 1;">&times;</button>
+                            <button onclick="closeOrderDetails()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; line-height: 1;">&times;</button> 
                         </div>
 
                         <div class="grid-2" style="gap: 1rem; margin-bottom: 1.5rem; background-color: var(--background); padding: 1rem; border-radius: 0.5rem;">
@@ -2759,7 +2957,7 @@ async function loadData() {
                         </div>
 
                         ${hasOutstandingPayment ? `
-                            <button onclick="markAsFullyPaid(${order.id})" class="btn-primary" style="margin-top: 2rem; width: 100%; background-color: var(--success);">✓ Mark as Fully Paid & Print Receipt</button>
+                            <button onclick="markAsFullyPaid(${order.id})" class="btn-primary" style="margin-top: 2rem; width: 100%; background-color: var(--success);">&#10003; Mark as Fully Paid & Print Receipt</button>
                         ` : ''}
 
                         <button onclick="closeOrderDetails()" class="btn-secondary" style="margin-top: 1rem; width: 100%;">Close</button>
@@ -2806,12 +3004,20 @@ async function loadData() {
                         </div>
                         <div class="form-group">
                             <label class="form-label">Logo (URL or Emoji)</label>
-                            <input type="text" id="companyLogo" class="form-input" value="${appState.companyProfile.logo}">
+                            <div style="display: flex; align-items: center; gap: 1rem;">
+                                ${appState.companyProfile.logo.startsWith('data:image') ? `<img src="${appState.companyProfile.logo}" alt="Current Logo" style="height: 40px; width: 40px; border-radius: 0.25rem; object-fit: cover; background: var(--background);">` : `<div style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background: var(--background); border-radius: 0.25rem;">🖼️</div>`}
+                                <input type="file" id="companyLogoUpload" class="form-input" accept="image/png, image/jpeg, image/gif" onchange="handleLogoUpload(event)"> 
+                            </div>
+                            <small style="color: var(--text-secondary); font-size: 0.8rem; margin-top: 0.5rem; display: block;">Select a new logo to automatically update it. The change is saved immediately.</small>
                         </div>
                     </div>
                     <button onclick="saveCompanyProfile()" class="btn-primary" style="margin-top: 1rem;">Save Profile</button>
                 </div>
             `;
+
+            // The logo input is now a file type and handled separately
+            // We remove it from the saveCompanyProfile function
+
             return `
                 <div class="animate-slide-up">
                     <h1 style="font-size: 2rem; font-weight: 700; margin-bottom: 2rem; color: var(--text-primary);">Settings</h1>
@@ -2821,10 +3027,10 @@ async function loadData() {
                         <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.9rem;">Choose between light and dark mode for your preferred viewing experience</p>
                         <div class="mode-toggle">
                             <button class="mode-toggle-btn ${appState.theme === 'light' ? 'active' : ''}" onclick="toggleTheme('light')">
-                                ☀️ Light Mode
+                                &#9728;&#65039; Light Mode
                             </button>
                             <button class="mode-toggle-btn ${appState.theme === 'dark' ? 'active' : ''}" onclick="toggleTheme('dark')">
-                                🌙 Dark Mode
+                                &#127769; Dark Mode
                             </button>
                         </div>
                     </div>
@@ -2859,8 +3065,8 @@ async function loadData() {
                                 <h4 style="font-weight: 600; margin-bottom: 1rem;">Data Backup & Restore</h4>
                                 <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.9rem;">Create a backup of all application data or restore from a previous backup file.</p>
                                 <div style="display: flex; gap: 1rem;">
-                                    <button onclick="handleBackup()" class="btn-primary">📤 Create Backup</button>
-                                    <button onclick="handleRestore()" class="btn-secondary" style="color: var(--error);">📥 Restore from Backup</button>
+                                    <button onclick="handleBackup()" class="btn-primary">&#128228; Create Backup</button>
+                                    <button onclick="handleRestore()" class="btn-secondary" style="color: var(--error);">&#128229; Restore from Backup</button>
                                 </div>
                             </div>
                         ` : ''}
@@ -2874,38 +3080,86 @@ async function loadData() {
                 return `<div class="card"><p>Access Denied: Only admins can view the history log.</p></div>`;
             }
 
+            const searchQuery = appState.historySearchQuery.toLowerCase();
+            const filteredLog = auditLog.filter(log => {
+                if (!searchQuery) return true;
+                const userMatch = log.user.toLowerCase().includes(searchQuery);
+                const actionMatch = log.action.toLowerCase().replace('_', ' ').includes(searchQuery);
+                return userMatch || actionMatch;
+            });
+
+            function resetHistorySearch() {
+                appState.historySearchQuery = '';
+                renderApp();
+            }
+
             return `
                 <div style="max-width: 1400px; margin: 0 auto;" class="animate-slide-up">
                     <h2 style="font-size: 2rem; font-weight: 700; margin-bottom: 2rem;">Application History Log</h2>
 
-                    <div class="card">
-                        <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">This log shows all significant changes made within the application. It is read-only.</p>
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th>Timestamp</th>
-                                    <th>User</th>
-                                    <th>Role</th>
-                                    <th>Action</th>
-                                    <th>Details</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${auditLog.length > 0 ? auditLog.map(log => `
+                    <div class="card"> 
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                            <p style="color: var(--text-secondary); margin: 0;">This log shows all significant changes made within the application. It is read-only.</p>
+                            ${filteredLog.length > 10 ? `<span class="badge badge-primary">Page ${appState.analytics.historyPage + 1} of ${Math.ceil(filteredLog.length / 10)}</span>` : ''}
+                        </div>
+
+                        <div class="filter-section" style="padding-bottom: 1.5rem; border-bottom: 1px solid var(--border);">
+                            <div class="filter-group" style="flex: 2;">
+                                <label>Search by User or Action</label>
+                                <input type="text" id="historySearch" placeholder="e.g., John Doe or CREATE_BILLING" value="${appState.historySearchQuery}" oninput="appState.historySearchQuery = this.value; appState.analytics.historyPage = 0; renderApp();">
+                            </div>
+                            <button class="btn-secondary" onclick="appState.historySearchQuery = ''; renderApp();">Clear</button>
+                        </div>
+                        <div class="responsive-table-wrapper">
+                            <table class="table">
+
+                                <thead>
                                     <tr>
-                                        <td style="white-space: nowrap; font-size: 0.85rem;">${log.timestamp instanceof Date ? log.timestamp.toLocaleString() : 'Invalid Date'}</td>
-                                        <td><strong>${log.user}</strong></td>
-                                        <td><span class="badge ${log.role === 'Admin' ? 'badge-error' : 'badge-primary'}">${log.role}</span></td>
-                                        <td style="font-weight: 500;">${log.action.replace('_', ' ')}</td>
-                                        <td style="font-size: 0.9rem;">${log.details}</td>
+                                        <th>Timestamp</th>
+                                        <th>User</th>
+                                        <th>Role</th>
+                                        <th>Action</th>
+                                        <th>Details</th>
                                     </tr>
-                                `).join('') : `
-                                    <tr>
-                                        <td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 2rem;">No history records found.</td>
-                                    </tr>
-                                `}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    ${(() => {
+                                        const page = appState.analytics.historyPage;
+                                        const itemsPerPage = 10;
+                                        const paginatedItems = filteredLog.slice(page * itemsPerPage, (page + 1) * itemsPerPage);
+
+                                        if (paginatedItems.length === 0) {
+                                            return `
+                                                <tr>
+                                                    <td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 2rem;">No history records found.</td>
+                                                </tr>
+                                            `;
+                                        }
+
+                                        return paginatedItems.map(log => `
+                                            <tr>
+                                                <td style="white-space: nowrap; font-size: 0.85rem;">${log.timestamp instanceof Date ? log.timestamp.toLocaleString() : 'Invalid Date'}</td>
+                                                <td><strong>${log.user}</strong></td>
+                                                <td><span class="badge ${log.role === 'Admin' ? 'badge-error' : 'badge-primary'}">${log.role}</span></td>
+                                                <td style="font-weight: 500;">${log.action.replace('_', ' ')}</td>
+                                                <td style="font-size: 0.9rem; word-break: break-word;">${log.details}</td>
+                                            </tr>
+                                        `).join('');
+                                    })()}
+                                </tbody>
+                            </table>
+                        </div>
+                        ${filteredLog.length > 10 ? `
+                            <div style="display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1.5rem;">
+                                <button class="btn-secondary" onclick="changeHistoryPage(-1, ${filteredLog.length})" ${appState.analytics.historyPage === 0 ? 'disabled' : ''}>&larr; Previous</button>
+                                <button class="btn-secondary" onclick="changeHistoryPage(1, ${filteredLog.length})" ${appState.analytics.historyPage >= Math.ceil(filteredLog.length / 10) - 1 ? 'disabled' : ''}>Next &rarr;</button>
+                            </div>
+                        ` : `
+                                        <tr>
+                                            <td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 2rem;">No history records found.</td>
+                                        </tr>
+                                    `}
+                                </tbody>
                     </div>
 
                     <div style="margin-top: 1.5rem;">
@@ -2963,9 +3217,9 @@ async function loadData() {
             // PR agent search input
             const prSearchInput = document.getElementById('referredBySearch');
             if (prSearchInput) {
-                prSearchInput.addEventListener('input', function() {
+                prSearchInput.oninput = function() {
                     renderPRSuggestions(this.value);
-                });
+                };
                 prSearchInput.addEventListener('focus', function() {
                     // Show suggestions on focus
                     renderPRSuggestions(this.value);
@@ -3072,7 +3326,7 @@ async function loadData() {
             } else if (matches.length > 0) {
                 // Show matched suggestions
                 suggestionsDiv.innerHTML = matches.map(pr => `
-                    <div class="pr-suggestion-item" data-name="${pr.name}" data-phone="${pr.phone}" style="padding:0.5rem; border-bottom:1px solid var(--border); cursor:pointer; hover: background:var(--primary-light);">
+                    <div class="pr-suggestion-item" data-name="${pr.name}" data-phone="${pr.phone}" style="padding:0.5rem; border-bottom:1px solid var(--border); cursor:pointer;">
                         <div style="font-weight:500;">${pr.name}</div>
                         <div style="font-size:0.8rem; color:var(--text-secondary);">${pr.phone}</div>
                     </div>
@@ -3188,6 +3442,10 @@ async function loadData() {
             appState.editingPRId = null; // Cancel any edits when navigating away
             appState.editingInventoryId = null;
             resetAddForms(); // Reset forms when navigating away
+            if (view !== 'inventory') appState.inventorySearchQuery = ''; // Reset inventory search
+            if (view !== 'history') appState.analytics.historyPage = 0; // Reset history page
+            if (view !== 'history') appState.historySearchQuery = ''; // Reset history search
+            if (view !== 'analytics') appState.analytics.prPerformancePage = 0; // Reset analytics page
             clearFilters(); // Clear filters when navigating away from records
             renderApp();
         }
@@ -3202,7 +3460,7 @@ async function loadData() {
                 appState.billingData.patientName = document.getElementById('patientName').value;
                 appState.billingData.contact = document.getElementById('patientContact').value;
                 appState.billingData.referredBy = document.getElementById('referredBySearch').value;
-                appState.billingData.staffName = document.getElementById('staffName').value;
+                appState.billingData.staffName = appState.currentUser.fullName;
                 appState.billingData.pid = document.getElementById('patientName').value ? (appState.billingData.pid || generatePID()) : '';
 
                 if (!appState.billingData.patientName || !appState.billingData.staffName) {
@@ -3231,7 +3489,7 @@ async function loadData() {
                 const overrideInput = appState.vipMode ? `
                     <input type="number" class="vip-override-input" data-id="${s.id}" value="${s.overridePrice != null ? s.overridePrice : ''}" placeholder="Override price..." style="width:100px; padding:0.25rem; font-size:0.85rem; border:1px solid var(--border); border-radius:0.25rem;" />
                 ` : '';
-                servicesHTML += `
+                servicesHTML += ` 
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem; padding:0.5rem; background:var(--background); border-radius:0.25rem;">
                         <div style="flex:1;">
                             <div>• ${s.name}${vipTag}</div>
@@ -3240,7 +3498,7 @@ async function loadData() {
                         <div style="text-align:right; display:flex; flex-direction:column; align-items:flex-end; gap:0.25rem;">
                             <div style="font-weight:700">${formatCurrency(usedPrice)}</div>
                             ${overrideInput}
-                            <button class="remove-selected" data-id="${s.id}" style="background:none; border:none; color:var(--error); cursor:pointer; font-size:0.95rem;">× Remove</button>
+                            <button class="remove-selected" data-id="${s.id}" style="background:none; border:none; color:var(--error); cursor:pointer; font-size:0.95rem;">&times; Remove</button>
                         </div>
                     </div>
                 `;
@@ -3387,6 +3645,12 @@ async function loadData() {
             document.body.removeChild(printFrame);
         }
 
+        function reprintReceiptById(orderId) {
+            const order = orders.find(o => o.id === orderId);
+            if (order) printReceipt(order);
+            else alert('Could not find order to print.');
+        }
+
         // --- Helper functions for new service selection flow ---
         function addServiceById(id) {
             if (!id) return;
@@ -3457,6 +3721,12 @@ async function loadData() {
             if (appState.billingData.paymentStatus === 'installment' && appState.billingData.amountPaid <= 0) {
                 alert('For installment payments, please enter the amount paid.');
                 return;
+            }
+
+            // Add confirmation dialog before finalizing
+            const totalAmountFormatted = formatCurrency(appState.billingData.total);
+            if (!confirm(`Are you sure you want to complete the billing for "${appState.billingData.patientName}" with a total of ${totalAmountFormatted}?`)) {
+                return; // User clicked 'Cancel', so we stop the function here.
             }
 
             const newOrder = {
@@ -3542,7 +3812,7 @@ async function loadData() {
                 return;
             }
 
-            inventory.push({ id: inventory.length + 1, name, category, price });
+            inventory.push({ id: (inventory.length > 0 ? Math.max(...inventory.map(i => i.id)) : 0) + 1, name, category, price });
             autoSave(); // Save the updated inventory
 
             logAction('CREATE_INVENTORY', `Added new test: '${name}' with price ${formatCurrency(price)}.`);
@@ -3591,7 +3861,7 @@ async function loadData() {
 
             autoSave(); // Save the new user
             logAction('CREATE_STAFF', `Added new staff member: '${fullName}' (Username: ${username}).`);
-            appState.showAddStaffForm = false;
+            appState.showAddStaffForm = false; 
             renderApp();
         }
 
@@ -3735,24 +4005,164 @@ async function loadData() {
             }
         }
 
+        function changePRPerformancePage(direction) {
+            const newPage = appState.analytics.prPerformancePage + direction;
+            const prPerformance = getPRPerformance();
+            const totalPages = Math.ceil(prPerformance.length / 10);
+
+            if (newPage >= 0 && newPage < totalPages) {
+                appState.analytics.prPerformancePage = newPage;
+                renderApp();
+            }
+        }
+
+        function changeHistoryPage(direction, logLength) {
+            const newPage = appState.analytics.historyPage + direction;
+            const totalPages = Math.ceil(logLength / 10);
+
+            if (newPage >= 0 && newPage < totalPages) {
+                appState.analytics.historyPage = newPage;
+                renderApp();
+            }
+        }
+
+        function toggleFullDailyRecord() {
+            appState.showFullDailyRecord = !appState.showFullDailyRecord;
+            if (appState.showFullDailyRecord) {
+                // Reset to today's date when opening
+                appState.dailyRecordViewDate = new Date();
+            }
+            renderApp();
+        }
+
+        function changeDailyRecordDate(direction) {
+            const newDate = new Date(appState.dailyRecordViewDate);
+            newDate.setDate(newDate.getDate() + direction);
+            // Prevent going into the future
+            if (newDate > new Date()) {
+                return;
+            }
+            appState.dailyRecordViewDate = newDate;
+            renderApp();
+        }
+
+        function updateAnalyticsDateRange(key, value) {
+            appState.analyticsDateRange[key] = value;
+            renderApp();
+        }
+
+        function resetAnalyticsDateRange() {
+            appState.analyticsDateRange = {
+                start: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0],
+                end: new Date().toISOString().split('T')[0]
+            };
+            renderApp();
+        }
+
+        // Keep a reference to the chart to destroy it before re-rendering
+        let prChartInstance = null;
+
+        function renderPRPerformanceChart() {
+            const prPerformance = getFilteredPRPerformance();
+            const ctx = document.getElementById('prPerformanceChart')?.getContext('2d');
+            if (!ctx) return;
+
+            // Destroy the old chart instance if it exists
+            if (prChartInstance) {
+                prChartInstance.destroy();
+            }
+
+            const labels = prPerformance.map(p => p.name);
+            const data = prPerformance.map(p => p.revenue);
+
+            prChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Revenue Generated',
+                        data: data,
+                        backgroundColor: 'rgba(14, 74, 124, 0.6)', // --primary with opacity
+                        borderColor: 'rgba(14, 74, 124, 1)', // --primary
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    indexAxis: 'y', // Display as a horizontal bar chart
+                    responsive: true,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return ` Revenue: ${formatCurrency(context.raw)}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: { x: { beginAtZero: true } }
+                }
+            });
+        }
+
+        function toggleFullDailyTestRecord() {
+            appState.showFullDailyTestRecord = !appState.showFullDailyTestRecord;
+            if (appState.showFullDailyTestRecord) {
+                // Reset to today's date when opening
+                appState.dailyTestRecordViewDate = new Date();
+            }
+            renderApp();
+        }
+
+        function changeDailyTestRecordDate(direction) {
+            const newDate = new Date(appState.dailyTestRecordViewDate);
+            newDate.setDate(newDate.getDate() + direction);
+            // Prevent going into the future
+            if (newDate > new Date()) return;
+            appState.dailyTestRecordViewDate = newDate;
+            renderApp();
+        }
+
         function saveCompanyProfile() {
             const name = document.getElementById('companyName').value;
             const address = document.getElementById('companyAddress').value;
             const email = document.getElementById('companyEmail').value;
             const contact = document.getElementById('companyContact').value;
-            const logo = document.getElementById('companyLogo').value;
 
             if (!name || !address || !email || !contact) {
-                alert('Please fill all company profile fields.');
+                alert('Please fill in all company profile fields.');
                 return;
             }
 
-            appState.companyProfile = { name, address, email, contact, logo };
+            appState.companyProfile = { ...appState.companyProfile, name, address, email, contact };
             localStorage.setItem('companyProfile', JSON.stringify(appState.companyProfile));
             autoSave(); // Save updated profile to the main data file as well
             logAction('UPDATE_PROFILE', `Updated company profile information.`);
+
             alert('Company profile updated successfully!');
             renderApp();
+        }
+
+        function handleLogoUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // Use FileReader to convert image to a Base64 Data URL
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const dataUrl = e.target.result;
+                appState.companyProfile.logo = dataUrl;
+
+                // Save the profile with the new logo immediately
+                localStorage.setItem('companyProfile', JSON.stringify(appState.companyProfile));
+                autoSave();
+                logAction('UPDATE_PROFILE', 'Updated company logo.');
+                alert('Logo updated successfully!');
+                
+                // Re-render the app to show the new logo everywhere
+                renderApp();
+            };
+            reader.readAsDataURL(file);
         }
 
         async function handleBackup() {
@@ -3783,10 +4193,204 @@ async function loadData() {
         }
 
         function printReport() {
-            // This will trigger the browser's print dialog, using the @media print styles to format the output.
-            window.print();
+            const { start, end } = appState.analyticsDateRange;
+            const filteredStats = getFilteredStats();
+            const prPerformance = getFilteredPRPerformance();
+
+            const printContent = `
+                <html>
+                <head>
+                    <title>Analytics Report</title>
+                    <style>
+                        body { font-family: sans-serif; }
+                        .report-header { text-align: center; margin-bottom: 2rem; }
+                        .report-header h1 { margin: 0; }
+                        .report-header p { margin: 5px 0; color: #555; }
+                        .section { margin-bottom: 2rem; border: 1px solid #ccc; padding: 1rem; border-radius: 8px; }
+                        .section h2 { margin-top: 0; border-bottom: 2px solid #333; padding-bottom: 0.5rem; }
+                        .stat { font-size: 1.5rem; font-weight: bold; color: #0e4a7c; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+                        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                        th { background-color: #f2f2f2; }
+                    </style>
+                </head>
+                <body>
+                    <div class="report-header">
+                        <h1>Analytics Report</h1>
+                        <p><strong>${appState.companyProfile.name}</strong></p>
+                        <p>Report for period: <strong>${start}</strong> to <strong>${end}</strong></p>
+                    </div>
+
+                    <div class="section">
+                        <h2>Company Income Summary</h2>
+                        <p>Total Income for Selected Period: <span class="stat">${formatCurrency(filteredStats.totalRevenue)}</span></p>
+                        <p>Total Orders in Period: <span class="stat">${filteredStats.orderCount}</span></p>
+                    </div>
+
+                    <div class="section">
+                        <h2>Agent Referral Performance</h2>
+                        <table>
+                            <thead><tr><th>Agent Name</th><th>Orders</th><th>Revenue Generated</th></tr></thead>
+                            <tbody>
+                                ${prPerformance.map(pr => `
+                                    <tr><td>${pr.name}</td><td>${pr.orders}</td><td>${formatCurrency(pr.revenue)}</td></tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </body>
+                </html>
+            `;
+
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(printContent);
+            printWindow.document.close();
+            printWindow.print();
         }
         
+        function printPRPerformanceReport() {
+            const { start, end } = appState.analyticsDateRange;
+            const prPerformance = getFilteredPRPerformance();
+
+            const printContent = `
+                <html>
+                <head>
+                    <title>Referring Agent Revenue Report</title>
+                    <style>
+                        body { font-family: sans-serif; }
+                        .report-header { text-align: center; margin-bottom: 2rem; }
+                        .report-header h1 { margin: 0; }
+                        .report-header p { margin: 5px 0; color: #555; }
+                        .section { margin-bottom: 2rem; border: 1px solid #ccc; padding: 1rem; border-radius: 8px; }
+                        .section h2 { margin-top: 0; border-bottom: 2px solid #333; padding-bottom: 0.5rem; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+                        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                        th { background-color: #f2f2f2; }
+                    </style>
+                </head>
+                <body>
+                    <div class="report-header">
+                        <h1>Referring Agent Revenue Report</h1>
+                        <p><strong>${appState.companyProfile.name}</strong></p>
+                        <p>Report for period: <strong>${start}</strong> to <strong>${end}</strong></p>
+                    </div>
+
+                    <div class="section">
+                        <h2>Agent Referral Performance</h2>
+                        <table>
+                            <thead><tr><th>Agent Name</th><th>Orders</th><th>Revenue Generated</th></tr></thead>
+                            <tbody>
+                                ${prPerformance.map(pr => `
+                                    <tr><td>${pr.name}</td><td>${pr.orders}</td><td>${formatCurrency(pr.revenue)}</td></tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </body>
+                </html>
+            `;
+
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(printContent);
+            printWindow.document.close();
+            printWindow.print();
+        }
+
+        function printTopTestsReport() {
+            const { start, end } = appState.analyticsDateRange;
+            const topTests = getFilteredTopTests();
+
+            const printContent = `
+                <html>
+                <head>
+                    <title>Top Ordered Tests Report</title>
+                    <style>
+                        body { font-family: sans-serif; }
+                        .report-header { text-align: center; margin-bottom: 2rem; }
+                        .report-header h1 { margin: 0; }
+                        .report-header p { margin: 5px 0; color: #555; }
+                        .section { margin-bottom: 2rem; border: 1px solid #ccc; padding: 1rem; border-radius: 8px; }
+                        .section h2 { margin-top: 0; border-bottom: 2px solid #333; padding-bottom: 0.5rem; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+                        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                        th { background-color: #f2f2f2; }
+                    </style>
+                </head>
+                <body>
+                    <div class="report-header">
+                        <h1>Top Ordered Tests Report</h1>
+                        <p><strong>${appState.companyProfile.name}</strong></p>
+                        <p>Report for period: <strong>${start}</strong> to <strong>${end}</strong></p>
+                    </div>
+
+                    <div class="section">
+                        <h2>Top 5 Most Ordered Tests</h2>
+                        <table>
+                            <thead><tr><th>Test Name</th><th>Times Ordered</th></tr></thead>
+                            <tbody>
+                                ${topTests.map(test => `
+                                    <tr><td>${test.name}</td><td>${test.count}</td></tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </body>
+                </html>
+            `;
+
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(printContent);
+            printWindow.document.close();
+            printWindow.print();
+        }
+
+        function printDailyRecords() {
+            const dailyRecords = getFilteredRecords(); // This now gets records for the selected day
+            const viewDate = appState.recordsViewDate.toLocaleDateString('en-CA');
+
+            if (dailyRecords.length === 0) {
+                alert('No records to print for this day.');
+                return;
+            }
+
+            const printContent = `
+                <html>
+                <head>
+                    <title>Daily Records for ${viewDate}</title>
+                    <style>
+                        body { font-family: sans-serif; }
+                        .report-header { text-align: center; margin-bottom: 2rem; }
+                        .report-header h1 { margin: 0; }
+                        .report-header p { margin: 5px 0; color: #555; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: 0.9rem; }
+                        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                        th { background-color: #f2f2f2; }
+                    </style>
+                </head>
+                <body>
+                    <div class="report-header">
+                        <h1>Patient Records</h1>
+                        <p><strong>${appState.companyProfile.name}</strong></p>
+                        <p>Records for: <strong>${viewDate}</strong></p>
+                    </div>
+                    <table>
+                        <thead><tr><th>Patient Name</th><th>PID</th><th>Services</th><th>Total</th><th>Status</th><th>Staff</th><th>Time</th></tr></thead>
+                        <tbody>
+                            ${dailyRecords.map(order => `
+                                <tr><td>${order.patientName}</td><td>${order.pid}</td><td>${order.services.map(s => s.name).join(', ')}</td><td>${formatCurrency(order.total)}</td><td>${order.status}</td><td>${order.staffName}</td><td>${order.time || 'N/A'}</td></tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </body>
+                </html>
+            `;
+
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(printContent);
+            printWindow.document.close();
+            printWindow.print();
+        }
+
         function renderMainContent() {
             let content = '';
 
