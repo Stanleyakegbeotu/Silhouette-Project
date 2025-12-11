@@ -919,7 +919,8 @@ tion        * {
                 ,
                 searchQuery: '', // For patient name/PID search
                 dailySummaryDate: new Date(),
-                prManagementSearchQuery: ''
+                prManagementSearchQuery: '',
+                searchAllRecords: false // To toggle between daily and all-time record search
             }
         }; 
         appState.analyticsDateRange = {
@@ -1824,15 +1825,19 @@ async function loadData() {
 
         function getFilteredRecords() {
             const filters = appState.recordFilters;
-            const viewDate = new Date(appState.recordsViewDate).toISOString().split('T')[0];
+            let filtered = [...orders]; // Start with a copy of all orders
 
-            // 1. Filter by the selected day first
-            let filtered = orders.filter(order => {
-                const orderDate = new Date(order.date).toISOString().split('T')[0];
-                return orderDate === viewDate;
-            });
+            // 1. Filter by date unless "search all" is active
+            if (!filters.searchAllRecords) {
+                const viewDate = new Date(appState.recordsViewDate).toISOString().split('T')[0];
+                filtered = filtered.filter(order => {
+                    const orderDate = new Date(order.date).toISOString().split('T')[0];
+                    return orderDate === viewDate;
+                });
+            }
 
-            // 2. Apply search query on the daily records
+
+            // 2. Apply search query
             if (filters.searchQuery) {
                 const query = filters.searchQuery.toLowerCase();
                 filtered = filtered.filter(order => 
@@ -1840,7 +1845,7 @@ async function loadData() {
                     order.pid.toLowerCase().includes(query)
                 );
             }
-            return filtered;
+            return filtered.sort((a, b) => new Date(b.date) - new Date(a.date)); // Always sort by most recent
         }
 
         function exportToCSV() {
@@ -2096,6 +2101,9 @@ async function loadData() {
         }
 
         function renderDashboard() {
+            const todayString = new Date().toISOString().split('T')[0];
+            const todaysOrders = orders.filter(order => new Date(order.date).toISOString().split('T')[0] === todayString);
+
             return `
                 <div style="max-width: 1400px; margin: 0 auto;">
                     <h2 style="font-size: 2rem; font-weight: 700; margin-bottom: 2rem;">Welcome, ${appState.currentUser.fullName}! &#128075;</h2>
@@ -2149,20 +2157,20 @@ async function loadData() {
                                 <p style="font-size: 1.75rem; font-weight: 700; color: var(--accent);">${formatCurrency(getTodaysRevenue())}</p>
                             </div>
                             <div style="padding: 1rem; background-color: var(--background); border-radius: 0.5rem;">
-                                <p style="color: var(--text-secondary); font-size: 0.875rem;">Total Patients</p>
-                                <p style="font-size: 1.75rem; font-weight: 700; color: var(--primary);">${orders.length}</p>
+                                <p style="color: var(--text-secondary); font-size: 0.875rem;">Today's Patients</p>
+                                <p style="font-size: 1.75rem; font-weight: 700; color: var(--primary);">${todaysOrders.length}</p>
                             </div>
                             <div style="padding: 1rem; background-color: var(--background); border-radius: 0.5rem;">
-                                <p style="color: var(--text-secondary); font-size: 0.875rem;">Full Payments</p>
-                                <p style="font-size: 1.75rem; font-weight: 700; color: var(--success);">${orders.filter(o => o.status === 'PAID').length}</p>
+                                <p style="color: var(--text-secondary); font-size: 0.875rem;">Today's Full Payments</p>
+                                <p style="font-size: 1.75rem; font-weight: 700; color: var(--success);">${todaysOrders.filter(o => o.status === 'PAID').length}</p>
                             </div>
                             <div style="padding: 1rem; background-color: var(--background); border-radius: 0.5rem;">
-                                <p style="color: var(--text-secondary); font-size: 0.875rem;">Outstanding Balance</p>
+                                <p style="color: var(--text-secondary); font-size: 0.875rem;">Today's Outstanding</p>
                                 <p style="font-size: 1.75rem; font-weight: 700; color: var(--warning);">
-                                    ${formatCurrency(orders.reduce((sum, o) => sum + (o.balance || 0), 0))}
+                                    ${formatCurrency(todaysOrders.reduce((sum, o) => sum + (o.balance || 0), 0))}
                                 </p>
                                 <p style="color: var(--text-secondary); font-size: 0.8rem; margin-top: 0.25rem;">
-                                    from ${orders.filter(o => o.paymentStatus === 'installment' && o.balance > 0).length} patients</p>
+                                    from ${todaysOrders.filter(o => o.paymentStatus === 'installment' && o.balance > 0).length} patients</p>
                             </div>
                         </div>
                     </div>
@@ -2377,24 +2385,25 @@ async function loadData() {
                             <!-- Added Payment Method Section -->
                             <div style="margin-bottom: 2rem;">
                                 <label class="form-label" style="margin-bottom: 1rem;">Payment Method *</label>
-                                <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1rem;">Click any method to enter an amount. You can use multiple methods.</p>
                                 <div class="payment-method">
-                                    <div class="payment-option ${appState.billingData.splitPayments.cash > 0 ? 'active' : ''}" onclick="editSplitPayment('cash')">
+                                    <div class="payment-option ${appState.billingData.paymentMethod === 'cash' ? 'active' : ''}" onclick="selectPaymentMethod('cash')">
                                         <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">💵</div>
                                         <div style="font-weight: 500;">Cash</div>
-                                        <div style="font-size: 0.9rem; color: var(--primary); font-weight: 600; margin-top: 0.5rem;">${formatCurrency(appState.billingData.splitPayments.cash)}</div>
                                     </div>
-                                    <div class="payment-option ${appState.billingData.splitPayments.pos > 0 ? 'active' : ''}" onclick="editSplitPayment('pos')">
+                                    <div class="payment-option ${appState.billingData.paymentMethod === 'pos' ? 'active' : ''}" onclick="selectPaymentMethod('pos')">
                                         <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">💳</div>
                                         <div style="font-weight: 500;">POS</div>
-                                        <div style="font-size: 0.9rem; color: var(--primary); font-weight: 600; margin-top: 0.5rem;">${formatCurrency(appState.billingData.splitPayments.pos)}</div>
                                     </div>
-                                    <div class="payment-option ${appState.billingData.splitPayments.transfer > 0 ? 'active' : ''}" onclick="editSplitPayment('transfer')">
+                                    <div class="payment-option ${appState.billingData.paymentMethod === 'transfer' ? 'active' : ''}" onclick="selectPaymentMethod('transfer')">
                                         <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🏦</div>
                                         <div style="font-weight: 500;">Transfer</div>
-                                        <div style="font-size: 0.9rem; color: var(--primary); font-weight: 600; margin-top: 0.5rem;">${formatCurrency(appState.billingData.splitPayments.transfer)}</div>
+                                    </div>
+                                    <div class="payment-option ${appState.billingData.paymentMethod === 'split' ? 'active' : ''}" onclick="selectPaymentMethod('split')">
+                                        <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">➗</div>
+                                        <div style="font-weight: 500;">Split Payment</div>
                                     </div>
                                 </div>
+                                ${appState.billingData.paymentMethod === 'split' ? renderSplitPaymentInputs() : ''}
                             </div>
 
                             <!-- Added Payment Status Section -->
@@ -2416,9 +2425,8 @@ async function loadData() {
                             ${appState.billingData.paymentStatus === 'installment' ? `
                                 <div class="animate-fade-in">
                                     <div class="form-group">
-                                        <label class="form-label">Total Amount Paid</label>
-                                        <input type="number" id="amountPaid" class="form-input" value="${appState.billingData.amountPaid}" readonly style="background-color: var(--background); font-weight: 700;" />
-                                        <small style="color: var(--text-secondary); font-size: 0.8rem; margin-top: 0.5rem; display: block;">This is the sum of all payment methods above. Click a method to edit.</small>
+                                        <label class="form-label">Amount Paid</label>
+                                        <input type="number" id="amountPaid" class="form-input" value="${appState.billingData.amountPaid}" oninput="updateInstallmentPayment(this.value)" ${appState.billingData.paymentMethod === 'split' ? 'readonly' : ''} />
                                     </div>
                                     <div style="font-size: 1rem; margin-bottom: 2rem; text-align: right;">
                                         Remaining Balance: 
@@ -2487,7 +2495,7 @@ async function loadData() {
                                         </div>
                                         <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; color: var(--text-secondary);">
                                             <span>Payment Method:</span>
-                                            <span id="receiptPaymentMethod">${Object.values(appState.billingData.splitPayments).filter(v => v > 0).length > 1 ? 'Split Payment' : (appState.billingData.paymentMethod || 'N/A')}</span>
+                                            <span id="receiptPaymentMethod">${appState.billingData.paymentMethod || 'N/A'}</span>
                                         </div>
                                         ${Object.values(appState.billingData.splitPayments).filter(v => v > 0).length > 1 ? `
                                             <div style="padding-left: 1rem; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
@@ -2966,6 +2974,18 @@ async function loadData() {
             }
         }
 
+        function deleteDraft(index) {
+            const draft = appState.drafts[index];
+            if (!draft) return;
+
+            if (confirm(`Are you sure you want to delete the draft for "${draft.patientName}"? This action cannot be undone.`)) {
+                const deletedDraftName = draft.patientName;
+                appState.drafts.splice(index, 1);
+                logAction('DELETE_DRAFT', `Deleted draft for '${deletedDraftName}'.`);
+                autoSave();
+                renderApp();
+            }
+        }
 
         function renderStaffManagement() {
             if (appState.currentUser.role !== 'Admin') {
@@ -3054,18 +3074,37 @@ async function loadData() {
                     <!-- Daily Record Navigation and Search -->
                     <div class="card animate-slide-up" style="margin-bottom: 2rem;">
                         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
-                            <h3 style="font-weight: 700; font-size: 1.25rem;">
-                                Records for: ${appState.recordsViewDate.toLocaleDateString('en-CA')}
+                            <h3 style="font-weight: 700; font-size: 1.25rem;" class="${appState.recordFilters.searchAllRecords ? 'disabled-text' : ''}">
+                                ${appState.recordFilters.searchAllRecords ? 'Showing All Records' : `Records for: ${appState.recordsViewDate.toLocaleDateString('en-CA')}`}
                             </h3>
                             <div style="display: flex; gap: 0.5rem;">
-                                <button class="btn-secondary" onclick="changeRecordsDate(-1)">&#8592; Previous Day</button>
-                                <button class="btn-secondary" onclick="changeRecordsDate(1)" ${new Date(appState.recordsViewDate).setHours(0,0,0,0) >= new Date().setHours(0,0,0,0) ? 'disabled' : ''}>Next Day &#8594;</button>
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label class="form-label" style="font-size: 0.8rem; margin-bottom: 0.25rem;">Go to Date</label>
+                                    <input type="date" class="form-input" onchange="setRecordsDate(this.value)" value="${appState.recordsViewDate.toISOString().split('T')[0]}" ${appState.recordFilters.searchAllRecords ? 'disabled' : ''}>
+                                </div>
+                                <button class="btn-secondary" onclick="changeRecordsDate(-1)" ${appState.recordFilters.searchAllRecords ? 'disabled' : ''} style="align-self: flex-end;">&#8592; Previous Day</button>
+                                ${(() => {
+                                    const today = new Date().setHours(0, 0, 0, 0);
+                                    const viewDate = new Date(appState.recordsViewDate).setHours(0, 0, 0, 0);
+                                    if (viewDate < today && !appState.recordFilters.searchAllRecords) {
+                                        return `<button class="btn-primary" onclick="navigateToCurrentDayRecords()">Back to Current Day</button>`;
+                                    }
+                                    return '';
+                                })()}
                             </div>
                         </div>
                         <div style="border-top: 1px solid var(--border); margin-top: 1.5rem; padding-top: 1.5rem;">
-                            <div class="form-group">
-                                <label class="form-label">Search within this day by Patient Name or PID</label>
-                                <input type="text" id="searchQuery" class="form-input" placeholder="Type to search..." value="${appState.recordFilters.searchQuery}" oninput="updateFilter('searchQuery', this.value)">
+                            <div style="display: flex; gap: 1.5rem; align-items: center;">
+                                <div class="form-group" style="flex: 1; margin-bottom: 0;">
+                                    <label class="form-label">Search by Patient Name or PID</label>
+                                    <input type="text" id="searchQuery" class="form-input" placeholder="Type to search..." value="${appState.recordFilters.searchQuery}" oninput="updateFilter('searchQuery', this.value)">
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0; display: flex; align-items: center; gap: 0.5rem; padding-top: 1.5rem;">
+                                    <input type="checkbox" id="searchAllRecords" onchange="updateFilter('searchAllRecords', this.checked)" ${appState.recordFilters.searchAllRecords ? 'checked' : ''} style="width: 1.25rem; height: 1.25rem;">
+                                    <label for="searchAllRecords" style="margin-bottom: 0;">
+                                        Search All Records
+                                    </label>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -3075,7 +3114,7 @@ async function loadData() {
                             <h3 style="font-weight: 700; margin: 0;">
                                 Daily Log (${filteredRecords.length} record${filteredRecords.length !== 1 ? 's' : ''})
                             </h3>
-                            <button onclick="printDailyRecords()" class="btn-primary" ${filteredRecords.length === 0 ? 'disabled' : ''}>
+                            <button onclick="printDailyRecords()" class="btn-primary" ${filteredRecords.length === 0 || appState.recordFilters.searchAllRecords ? 'disabled' : ''} title="${appState.recordFilters.searchAllRecords ? 'Printing is only available for single-day views.' : ''}">
                                 &#128424;&#65039; Print Daily Record
                             </button>
                         </div>
@@ -3893,30 +3932,47 @@ async function loadData() {
             renderApp();
         }
 
-        function editSplitPayment(method) {
-            const currentAmount = appState.billingData.splitPayments[method] || 0;
-            const input = prompt(`Enter amount for ${method.toUpperCase()}:`, currentAmount);
+        function selectPaymentMethod(method) {
+            appState.billingData.paymentMethod = method;
+            if (method !== 'split') {
+                appState.billingData.splitPayments = { cash: 0, pos: 0, transfer: 0 };
+            }
+            if (appState.billingData.paymentStatus === 'full') {
+                appState.billingData.amountPaid = appState.billingData.total;
+            }
+            renderApp();
+        }
 
-            if (input === null) return; // User cancelled
+        function renderSplitPaymentInputs() {
+            return `
+                <div class="card animate-fade-in" style="margin-top: 1rem; background-color: var(--background);">
+                    <h4 style="font-weight: 600; margin-bottom: 1rem;">Enter Split Amounts</h4>
+                    <div class="grid-3">
+                        <div class="form-group"><label class="form-label">Cash</label><input type="number" class="form-input" value="${appState.billingData.splitPayments.cash}" oninput="updateSplitPayment('cash', this.value)"></div>
+                        <div class="form-group"><label class="form-label">POS</label><input type="number" class="form-input" value="${appState.billingData.splitPayments.pos}" oninput="updateSplitPayment('pos', this.value)"></div>
+                        <div class="form-group"><label class="form-label">Transfer</label><input type="number" class="form-input" value="${appState.billingData.splitPayments.transfer}" oninput="updateSplitPayment('transfer', this.value)"></div>
+                    </div>
+                </div>
+            `;
+        }
 
-            const newAmount = parseFloat(input) || 0;
-            appState.billingData.splitPayments[method] = newAmount;
-
-            // Automatically determine the primary payment method based on the largest amount
-            const primaryMethod = Object.keys(appState.billingData.splitPayments).reduce((a, b) => appState.billingData.splitPayments[a] > appState.billingData.splitPayments[b] ? a : b);
-            appState.billingData.paymentMethod = primaryMethod;
-
-            // Recalculate total paid amount and balance
-            const totalPaid = Object.values(appState.billingData.splitPayments).reduce((sum, val) => sum + val, 0);
-            updateInstallmentPayment(totalPaid); // This function already updates balance and re-renders
+        function updateSplitPayment(method, value) {
+            appState.billingData.splitPayments[method] = parseFloat(value) || 0;
+            const totalPaid = Object.values(appState.billingData.splitPayments).reduce((sum, val) => sum + (val || 0), 0);
+            appState.billingData.amountPaid = totalPaid;
+            if (appState.billingData.paymentStatus === 'installment') {
+                appState.billingData.balance = Math.max(0, appState.billingData.total - totalPaid);
+            }
+            renderApp();
         }
 
         function updateInstallmentPayment(amount) {
             const paidAmount = parseFloat(amount) || 0;
             appState.billingData.amountPaid = paidAmount;
             appState.billingData.balance = Math.max(0, appState.billingData.total - paidAmount);
-            // We only need to re-render the billing part, but full render is simpler here
-            renderApp();
+            if (appState.billingData.paymentMethod !== 'split') {
+                renderApp();
+            }
         }
 
         function printReceipt(order) {
@@ -4339,7 +4395,24 @@ async function loadData() {
         }
 
         function clearFilters() {
-            appState.recordFilters = { date: '', month: '', year: '', time: '', filterType: 'all', searchQuery: '', dailySummaryDate: new Date(), prManagementSearchQuery: '' };
+            appState.recordFilters = { date: '', month: '', year: '', time: '', filterType: 'all', searchQuery: '', dailySummaryDate: new Date(), prManagementSearchQuery: '', searchAllRecords: false };
+            renderApp();
+        }
+
+        function navigateToCurrentDayRecords() {
+            appState.recordsViewDate = new Date();
+            renderApp();
+        }
+
+        function changeRecordsDate(direction) {
+            const newDate = new Date(appState.recordsViewDate);
+            newDate.setDate(newDate.getDate() + direction);
+            appState.recordsViewDate = newDate;
+            renderApp();
+        }
+
+        function setRecordsDate(dateString) {
+            appState.recordsViewDate = new Date(dateString);
             renderApp();
         }
 
@@ -4730,7 +4803,7 @@ async function loadData() {
 
         function printDailyRecords() {
             const dailyRecords = getFilteredRecords(); // This now gets records for the selected day
-            const viewDate = appState.recordsViewDate.toLocaleDateString('en-CA');
+            const viewDate = appState.recordFilters.searchAllRecords ? 'All Records' : appState.recordsViewDate.toLocaleDateString('en-CA');
 
             if (dailyRecords.length === 0) {
                 alert('No records to print for this day.');
