@@ -86,7 +86,7 @@
             --sidebar-bg: #6b21a8;
         }
 
-tion        * {
+* {
             --tw-bg-opacity: 1;
             --tw-text-opacity: 1;
         }
@@ -859,6 +859,31 @@ tion        * {
                 width: 100%;
             }
         }
+
+        .autocomplete-box {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+  z-index: 999;
+  display: none;
+}
+
+.autocomplete-item {
+  padding: 10px 14px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.autocomplete-item:hover {
+  background: #f3f4f6;
+}
+
     
     </style>
 </head>
@@ -932,6 +957,13 @@ tion        * {
         appState.dailyTestRecordViewDate = new Date();
         appState.historySearchQuery = '';
         appState.recordsViewDate = new Date(); // Add this for the records page pagination
+        appState.recordsViewDate = new Date();
+        appState.historyFilters = { // Added history filter state
+            user: '',
+            action: '',
+            startDate: '',
+            endDate: ''
+        };
 
         // VIP form mode to allow manual price overrides for selected services
         // NOTE: stored on appState so render() can pick it up
@@ -1267,203 +1299,210 @@ tion        * {
 
         // Inventory populated from provided master list (grouped by category)
         let inventory = [
-            { id: 1, name: 'FULL BLOOD COUNT', category: 'HEAMATOLOGY', price: 10000 },
-            { id: 2, name: 'ERYTHROCYTE SEDIMENTATION RATE (ESR)', category: 'HEAMATOLOGY', price: 7000 },
-            { id: 3, name: 'HB GENOTYPE', category: 'HEAMATOLOGY', price: 10000 },
-            { id: 4, name: 'BLOOD GROUPING (ABO)', category: 'HEAMATOLOGY', price: 10000 },
-            { id: 5, name: 'RETICULOCYTE COUNT', category: 'HEAMATOLOGY', price: 8000 },
-            { id: 6, name: 'CLOTTING PROFILE', category: 'HEAMATOLOGY', price: 30000 },
-            { id: 7, name: 'CLOTTING TIME', category: 'HEAMATOLOGY', price: 10000 },
-            { id: 8, name: 'BLEEDING TIME', category: 'HEAMATOLOGY', price: 10000 },
-            { id: 9, name: 'PROTHROMBIN TIME', category: 'HEAMATOLOGY', price: 10000 },
-            { id: 10, name: 'PTTK', category: 'HEAMATOLOGY', price: 10000 },
-            { id: 11, name: 'INR (INTERNATIONAL NORMALIZED RATIO)', category: 'HEAMATOLOGY', price: 10000 },
-            { id: 12, name: 'HB GENOTYPING', category: 'HEAMATOLOGY', price: 80000 },
-            { id: 13, name: 'BLOOD FILM', category: 'HEAMATOLOGY', price: 5000 },
-            { id: 14, name: 'PCV', category: 'HEAMATOLOGY', price: 5000 },
-            { id: 15, name: 'PLATELET COUNT', category: 'HEAMATOLOGY', price: 8000 },
-            { id: 16, name: 'VON WILLEBRAND ANTIGEN', category: 'HEAMATOLOGY', price: null },
-            { id: 17, name: 'COMB TEST (ICT, DCT)', category: 'HEAMATOLOGY', price: null },
-            { id: 18, name: 'G6PD', category: 'HEAMATOLOGY', price: 45000 },
-            { id: 19, name: 'FIBRINOGEN', category: 'HEAMATOLOGY', price: 70000 },
-            { id: 20, name: 'C-PEPTIDE', category: 'HEAMATOLOGY', price: 40000 },
-            { id: 21, name: 'AUTOIMMUNE TEST', category: 'HEAMATOLOGY', price: 150000 },
+            { id: 1, name: 'FULL BLOOD COUNT', category: 'LAB', price: 10000 },
+            { id: 2, name: 'ERYTHROCYTE SEDIMENTATION RATE (ESR)', category: 'LAB', price: 7000 },
+            { id: 3, name: 'HB GENOTYPE', category: 'LAB', price: 10000 },
+            { id: 4, name: 'BLOOD GROUPING (ABO)', category: 'LAB', price: 10000 },
+            { id: 5, name: 'RETICULOCYTE COUNT', category: 'LAB', price: 8000 },
+            { id: 6, name: 'CLOTTING PROFILE', category: 'LAB', price: 30000 },
+            { id: 7, name: 'CLOTTING TIME', category: 'LAB', price: 10000 },
+            { id: 8, name: 'BLEEDING TIME', category: 'LAB', price: 10000 },
+            { id: 9, name: 'PROTHROMBIN TIME', category: 'LAB', price: 10000 },
+            { id: 10, name: 'PTTK', category: 'LAB', price: 10000 },
+            { id: 11, name: 'INR (INTERNATIONAL NORMALIZED RATIO)', category: 'LAB', price: 10000 },
+            { id: 12, name: 'HB GENOTYPING', category: 'LAB', price: 80000 },
+            { id: 13, name: 'BLOOD FILM', category: 'LAB', price: 5000 },
+            { id: 14, name: 'PCV', category: 'LAB', price: 5000 },
+            { id: 15, name: 'PLATELET COUNT', category: 'LAB', price: 8000 },
+            { id: 16, name: 'VON WILLEBRAND ANTIGEN', category: 'LAB', price: null },
+            { id: 17, name: 'COMB TEST (ICT, DCT)', category: 'LAB', price: null },
+            { id: 18, name: 'G6PD', category: 'LAB', price: 45000 },
+            { id: 19, name: 'FIBRINOGEN', category: 'LAB', price: 70000 },
+            { id: 20, name: 'C-PEPTIDE', category: 'LAB', price: 40000 },
+            { id: 21, name: 'AUTOIMMUNE TEST', category: 'LAB', price: 150000 },
+            { id: 22, name: 'FBS', category: 'LAB', price: 5000 },
+            { id: 23, name: 'RBS', category: 'LAB', price: 5000 },
+            { id: 24, name: 'OGTT', category: 'LAB', price: 35000 },
+            { id: 25, name: '2HPP', category: 'LAB', price: 12000 },
+            { id: 26, name: 'E/U/C', category: 'LAB', price: 20000 },
+            { id: 27, name: 'SODIUM', category: 'LAB', price: 10000 },
+            { id: 28, name: 'POTASSIUM', category: 'LAB', price: 8000 },
+            { id: 29, name: 'CHLORIDE', category: 'LAB', price: 8000 },
+            { id: 30, name: 'BICARBONATE', category: 'LAB', price: 8000 },
+            { id: 31, name: 'UREA', category: 'LAB', price: 8000 },
+            { id: 32, name: 'CREATININE', category: 'LAB', price: 8000 },
+            { id: 33, name: 'LIVER FUNCTION TEST (LFT)', category: 'LAB', price: 20000 },
+            { id: 34, name: 'TOTAL BILIRUBIN', category: 'LAB', price: 7000 },
+            { id: 35, name: 'DIRECT BILIRUBIN', category: 'LAB', price: 7000 },
+            { id: 36, name: 'ALKALINE PHOSPHATASE', category: 'LAB', price: 6500 },
+            { id: 37, name: 'ASAT', category: 'LAB', price: 6000 },
+            { id: 38, name: 'ALAT', category: 'LAB', price: 6000 },
+            { id: 39, name: 'GGT', category: 'LAB', price: 6000 },
+            { id: 40, name: 'TOTAL PROTEIN', category: 'LAB', price: 6000 },
+            { id: 41, name: 'CALCIUM', category: 'LAB', price: 8500 },
+            { id: 42, name: 'ALBUMIN', category: 'LAB', price: 8000 },
+            { id: 43, name: 'URIC ACID', category: 'LAB', price: 10000 },
+            { id: 44, name: 'BLOOD UREA NITROGEN', category: 'LAB', price: 25000 },
+            { id: 45, name: 'FASTING LIPID PROFILE', category: 'LAB', price: 20000 },
+            { id: 46, name: 'TOTAL CHOLESTEROL', category: 'LAB', price: 20000 },
+            { id: 47, name: 'TRIGLYCERIDES', category: 'LAB', price: 8000 },
+            { id: 48, name: 'HDL', category: 'LAB', price: 8000 },
+            { id: 49, name: 'LDH', category: 'LAB', price: 8000 },
+            { id: 50, name: 'URINALYSIS', category: 'LAB', price: 5000 },
+            { id: 51, name: 'GLYCATED HAEMOGLOBIN (HBA1C)', category: 'LAB', price: 30000 },
+            { id: 52, name: 'UREA BREATH TEST', category: 'LAB', price: 50000 },
+            { id: 53, name: 'RHEUMATOID FACTOR', category: 'LAB', price: 30000 },
+            { id: 54, name: 'C-REACTIVE PROTEIN', category: 'LAB', price: 30000 },
+            { id: 55, name: 'PREGNANCY TEST', category: 'LAB', price: 3500 },
+            { id: 56, name: 'HORMONAL PROFILE', category: 'LAB', price: 65000 },
+            { id: 57, name: 'PROGESTERONE', category: 'LAB', price: 20000 },
+            { id: 58, name: 'LUITINIZING HORMONE', category: 'LAB', price: 20000 },
+            { id: 59, name: 'FOLLICLE STIMULATING HORMONE', category: 'LAB', price: 20000 },
+            { id: 60, name: 'PROLACTIN', category: 'LAB', price: 20000 },
+            { id: 61, name: 'ESTRADIOL', category: 'LAB', price: 20000 },
+            { id: 62, name: 'TESTOSTERONE', category: 'LAB', price: 20000 },
+            { id: 63, name: 'PSA', category: 'LAB', price: 20000 },
+            { id: 64, name: 'THYROID MARKERS (T3,T4,TSH)', category: 'LAB', price: 60000 },
+            { id: 65, name: 'CA-125', category: 'LAB', price: 30000 },
+            { id: 66, name: 'CA 15-3', category: 'LAB', price: 30000 },
+            { id: 67, name: 'CA 19-9', category: 'LAB', price: 30000 },
+            { id: 68, name: 'CALPROTECTIN', category: 'LAB', price: 40000 },
+            { id: 69, name: 'CEA', category: 'LAB', price: 25000 },
+            { id: 70, name: 'CK-MB', category: 'LAB', price: 30000 },
+            { id: 71, name: 'CORTISOL', category: 'LAB', price: 30000 },
+            { id: 72, name: 'CRP', category: 'LAB', price: 35000 },
+            { id: 73, name: 'HS-CRP', category: 'LAB', price: 40000 },
+            { id: 74, name: 'CYSTATIN-C', category: 'LAB', price: 40000 },
+            { id: 75, name: 'D-DIMER', category: 'LAB', price: 30000 },
+            { id: 76, name: 'ALPHA-FETO PROTEIN', category: 'LAB', price: 25000 },
+            { id: 77, name: 'FERRATIN', category: 'LAB', price: 30000 },
+            { id: 78, name: 'FOB (QUALITATIVE)', category: 'LAB', price: 15000 },
+            { id: 79, name: 'BETA-HCG', category: 'LAB', price: 20000 },
+            { id: 80, name: 'INSULIN', category: 'LAB', price: 40000 },
+            { id: 81, name: 'IGE', category: 'LAB', price: 20000 },
+            { id: 82, name: 'MICROALBUMIN', category: 'LAB', price: 50000 },
+            { id: 83, name: 'MYOGLOBULIN', category: 'LAB', price: 40000 },
+            { id: 84, name: 'PROCALCITONIN', category: 'LAB', price: 50000 },
+            { id: 85, name: 'TROPONIN-1', category: 'LAB', price: 30000 },
+            { id: 86, name: 'TROPONIN-T', category: 'LAB', price: 35000 },
+            { id: 87, name: 'STOOL M/C/S', category: 'LAB', price: 10000 },
+                        { id: 88, name: 'BLOOD CULTURE', category: 'LAB', price: 50000 },
+                        { id: 89, name: 'URINE M/C/S', category: 'LAB', price: 10000 },
+                        { id: 90, name: 'SWAB', category: 'LAB', price: 10000 },
+                        { id: 91, name: 'SPUTUM M/C/S', category: 'LAB', price: 10000 },
+                        { id: 92, name: 'AFB MICROSCOPY ×3', category: 'LAB', price: 45000 },
+                        { id: 93, name: 'MP', category: 'LAB', price: 5000 },
+                        { id: 94, name: 'WIDAL', category: 'LAB', price: 10000 },
+                        { id: 95, name: 'PAP SMEAR', category: 'LAB', price: 40000 },
+                        { id: 96, name: 'HIV I&II', category: 'LAB', price: 10000 },
+                        { id: 97, name: 'HEPATITIS A', category: 'LAB', price: 10000 },
+                        { id: 98, name: 'HBSAG', category: 'LAB', price: 10000 },
+                        { id: 99, name: 'HCV', category: 'LAB', price: 10000 },
+                        { id: 100, name: 'VDRL', category: 'LAB', price: 10000 },
+                        { id: 101, name: 'HEPATITIS B PROFILE', category: 'LAB', price: 20000 },
+                        { id: 102, name: 'CSF ANALYSIS', category: 'LAB', price: 15000 },
+                        { id: 103, name: 'H. PYLORI', category: 'LAB', price: 6000 },
+                        { id: 104, name: 'OCCULT BLOOD', category: 'LAB', price: 20000 },
+                        { id: 105, name: 'URINE MICROSCOPY', category: 'LAB', price: 10000 },
+                        { id: 106, name: 'STOOL MICROSCOPY', category: 'LAB', price: 10000 },
+                        { id: 107, name: 'HELICOBACTER PYLORI IGM/IGA/IGG', category: 'LAB', price: 60000 },
+                        { id: 108, name: 'RHEUMATOID FACTOR', category: 'LAB', price: 25000 },
+                        { id: 109, name: 'GRAM STAIN', category: 'LAB', price: 2000 },
+                        { id: 110, name: 'ASO', category: 'LAB', price: 30000 },
+                        { id: 111, name: 'CHLAMYDIA IGM/IGG', category: 'LAB', price: 80000 },
+                        { id: 112, name: 'MICROFILARIA', category: 'LAB', price: 15000 },
+                        { id: 113, name: 'HEPATITIS B VIRUS PROFILE', category: 'LAB', price: 15000 },
+                        { id: 114, name: 'TORCH PANEL', category: 'LAB', price: 200000 },
+                        { id: 115, name: 'RUBELLA IGM/IGG', category: 'LAB', price: 90000 },
+                        { id: 116, name: 'TOXOPLASMA IGG/IGM', category: 'LAB', price: 90000 },
+                        { id: 117, name: 'HSV IGM/IGG', category: 'LAB', price: 90000 },
+                        { id: 118, name: 'SEMEN ANALYSIS & M/C/S', category: 'LAB', price: 30000 },
+                        { id: 119, name: 'SEMEN ANALYSIS', category: 'LAB', price: 15000 },
+                        { id: 120, name: 'HIV VIRAL LOAD & DRUG RESISTANCE', category: 'LAB', price: 187000 },
+                        { id: 121, name: 'HEPATITIS B VIRAL LOAD', category: 'LAB', price: 50000 },
+                        { id: 122, name: 'HCV GENOTYPE', category: 'LAB', price: 120000 },
+                        { id: 123, name: 'ANA SCREENING', category: 'LAB', price: 40000 },
+                        { id: 124, name: 'ANCA', category: 'LAB', price: 40000 },
 
-            { id: 22, name: 'FBS', category: 'CLINICAL CHEMISTRY', price: 5000 },
-            { id: 23, name: 'RBS', category: 'CLINICAL CHEMISTRY', price: 5000 },
-            { id: 24, name: 'OGTT', category: 'CLINICAL CHEMISTRY', price: 35000 },
-            { id: 25, name: '2HPP', category: 'CLINICAL CHEMISTRY', price: 12000 },
-            { id: 26, name: 'E/U/C', category: 'CLINICAL CHEMISTRY', price: 20000 },
-            { id: 27, name: 'SODIUM', category: 'CLINICAL CHEMISTRY', price: 10000 },
-            { id: 28, name: 'POTASSIUM', category: 'CLINICAL CHEMISTRY', price: 8000 },
-            { id: 29, name: 'CHLORIDE', category: 'CLINICAL CHEMISTRY', price: 8000 },
-            { id: 30, name: 'BICARBONATE', category: 'CLINICAL CHEMISTRY', price: 8000 },
-            { id: 31, name: 'UREA', category: 'CLINICAL CHEMISTRY', price: 8000 },
-            { id: 32, name: 'CREATININE', category: 'CLINICAL CHEMISTRY', price: 8000 },
-            { id: 33, name: 'LIVER FUNCTION TEST (LFT)', category: 'CLINICAL CHEMISTRY', price: 20000 },
-            { id: 34, name: 'TOTAL BILIRUBIN', category: 'CLINICAL CHEMISTRY', price: 7000 },
-            { id: 35, name: 'DIRECT BILIRUBIN', category: 'CLINICAL CHEMISTRY', price: 7000 },
-            { id: 36, name: 'ALKALINE PHOSPHATASE', category: 'CLINICAL CHEMISTRY', price: 6500 },
-            { id: 37, name: 'ASAT', category: 'CLINICAL CHEMISTRY', price: 6000 },
-            { id: 38, name: 'ALAT', category: 'CLINICAL CHEMISTRY', price: 6000 },
-            { id: 39, name: 'GGT', category: 'CLINICAL CHEMISTRY', price: 6000 },
-            { id: 40, name: 'TOTAL PROTEIN', category: 'CLINICAL CHEMISTRY', price: 6000 },
-            { id: 41, name: 'CALCIUM', category: 'CLINICAL CHEMISTRY', price: 8500 },
-            { id: 42, name: 'ALBUMIN', category: 'CLINICAL CHEMISTRY', price: 8000 },
-            { id: 43, name: 'URIC ACID', category: 'CLINICAL CHEMISTRY', price: 10000 },
-            { id: 44, name: 'BLOOD UREA NITROGEN', category: 'CLINICAL CHEMISTRY', price: 25000 },
-            { id: 45, name: 'FASTING LIPID PROFILE', category: 'CLINICAL CHEMISTRY', price: 20000 },
-            { id: 46, name: 'TOTAL CHOLESTEROL', category: 'CLINICAL CHEMISTRY', price: 20000 },
-            { id: 47, name: 'TRIGLYCERIDES', category: 'CLINICAL CHEMISTRY', price: 8000 },
-            { id: 48, name: 'HDL', category: 'CLINICAL CHEMISTRY', price: 8000 },
-            { id: 49, name: 'LDH', category: 'CLINICAL CHEMISTRY', price: 8000 },
-            { id: 50, name: 'URINALYSIS', category: 'CLINICAL CHEMISTRY', price: 5000 },
-            { id: 51, name: 'GLYCATED HAEMOGLOBIN (HBA1C)', category: 'CLINICAL CHEMISTRY', price: 30000 },
-            { id: 52, name: 'UREA BREATH TEST', category: 'CLINICAL CHEMISTRY', price: 50000 },
-            { id: 53, name: 'RHEUMATOID FACTOR', category: 'CLINICAL CHEMISTRY', price: 30000 },
-            { id: 54, name: 'C-REACTIVE PROTEIN', category: 'CLINICAL CHEMISTRY', price: 30000 },
 
-            { id: 55, name: 'PREGNANCY TEST', category: 'HORMONAL ASSAYS', price: 3500 },
-            { id: 56, name: 'HORMONAL PROFILE', category: 'HORMONAL ASSAYS', price: 65000 },
-            { id: 57, name: 'PROGESTERONE', category: 'HORMONAL ASSAYS', price: 20000 },
-            { id: 58, name: 'LUITINIZING HORMONE', category: 'HORMONAL ASSAYS', price: 20000 },
-            { id: 59, name: 'FOLLICLE STIMULATING HORMONE', category: 'HORMONAL ASSAYS', price: 20000 },
-            { id: 60, name: 'PROLACTIN', category: 'HORMONAL ASSAYS', price: 20000 },
-            { id: 61, name: 'ESTRADIOL', category: 'HORMONAL ASSAYS', price: 20000 },
-            { id: 62, name: 'TESTOSTERONE', category: 'HORMONAL ASSAYS', price: 20000 },
-            { id: 63, name: 'PSA', category: 'HORMONAL ASSAYS', price: 20000 },
-            { id: 64, name: 'THYROID MARKERS (T3,T4,TSH)', category: 'HORMONAL ASSAYS', price: 60000 },
-            { id: 65, name: 'CA-125', category: 'HORMONAL ASSAYS', price: 30000 },
-            { id: 66, name: 'CA 15-3', category: 'HORMONAL ASSAYS', price: 30000 },
-            { id: 67, name: 'CA 19-9', category: 'HORMONAL ASSAYS', price: 30000 },
-            { id: 68, name: 'CALPROTECTIN', category: 'HORMONAL ASSAYS', price: 40000 },
-            { id: 69, name: 'CEA', category: 'HORMONAL ASSAYS', price: 25000 },
-            { id: 70, name: 'CK-MB', category: 'HORMONAL ASSAYS', price: 30000 },
-            { id: 71, name: 'CORTISOL', category: 'HORMONAL ASSAYS', price: 30000 },
-            { id: 72, name: 'CRP', category: 'HORMONAL ASSAYS', price: 35000 },
-            { id: 73, name: 'HS-CRP', category: 'HORMONAL ASSAYS', price: 40000 },
-            { id: 74, name: 'CYSTATIN-C', category: 'HORMONAL ASSAYS', price: 40000 },
-            { id: 75, name: 'D-DIMER', category: 'HORMONAL ASSAYS', price: 30000 },
-            { id: 76, name: 'ALPHA-FETO PROTEIN', category: 'HORMONAL ASSAYS', price: 25000 },
-            { id: 77, name: 'FERRATIN', category: 'HORMONAL ASSAYS', price: 30000 },
-            { id: 78, name: 'FOB (QUALITATIVE)', category: 'HORMONAL ASSAYS', price: 15000 },
-            { id: 79, name: 'BETA-HCG', category: 'HORMONAL ASSAYS', price: 20000 },
-            { id: 80, name: 'INSULIN', category: 'HORMONAL ASSAYS', price: 40000 },
-            { id: 81, name: 'IGE', category: 'HORMONAL ASSAYS', price: 20000 },
-            { id: 82, name: 'MICROALBUMIN', category: 'HORMONAL ASSAYS', price: 50000 },
-            { id: 83, name: 'MYOGLOBULIN', category: 'HORMONAL ASSAYS', price: 40000 },
-            { id: 84, name: 'PROCALCITONIN', category: 'HORMONAL ASSAYS', price: 50000 },
-            { id: 85, name: 'TROPONIN-1', category: 'HORMONAL ASSAYS', price: 30000 },
-            { id: 86, name: 'TROPONIN-T', category: 'HORMONAL ASSAYS', price: 35000 },
+            { id: 125, name: 'PELVIC ULTRASOUND', category: 'SCAN', price: 12000 },
+            { id: 126, name: 'ABDOMINOPELVIC SCAN', category: 'SCAN', price: 15000 },
+            { id: 127, name: 'OBSTETRICS SCAN', category: 'SCAN', price: 10000 },
+            { id: 128, name: 'THYROID SCAN', category: 'SCAN', price: 18000 },
+            { id: 129, name: 'BREAST SCAN', category: 'SCAN', price: 18000 },
+            { id: 130, name: 'TESTICULAR/SCROTAL/PROSTATE', category: 'SCAN', price: 18000 },
+            { id: 131, name: 'DOPPLER SCAN (DOUBLE LIMB)', category: 'SCAN', price: 100000 },
+            { id: 132, name: 'TRANSCRANIAL DOPPLER', category: 'SCAN', price: 50000 },
+            { id: 133, name: 'TESTICULAR SCAN', category: 'SCAN', price: 15000 },
+            { id: 134, name: 'RENAL SCAN', category: 'SCAN', price: 15000 },
+            { id: 135, name: 'ANOMALY SCAN', category: 'SCAN', price: 25000 },
+            { id: 136, name: 'TROSS (TRANSRECTAL ULTRASOUND)', category: 'SCAN', price: 20000 },
+            { id: 137, name: 'SONOURETHROGRAM (RCUG)', category: 'SCAN', price: 80000 },
+            { id: 138, name: 'ANTERIOR FONTANELLE', category: 'SCAN', price: 20000 },
+            { id: 139, name: 'FOLLICULAR TRACKING (3 VISIT)', category: 'SCAN', price: 60000 },
+            { id: 140, name: 'TRANSVAGINAL SCAN', category: 'SCAN', price: 18000 },
+            { id: 141, name: 'NECK ULTRASOUND', category: 'SCAN', price: 18000 },
+            { id: 142, name: 'SOFT TISSUE ULTRASOUND', category: 'SCAN', price: 15000 },
+            { id: 143, name: 'SMALL PARTS ULTRASOUND', category: 'SCAN', price: 15000 },
+            { id: 144, name: 'PENILE DOPPLER', category: 'SCAN', price: 250000 },
+            { id: 144, name: 'PENILE DOPPLER', category: 'SCAN', price: 250000 },
 
-            { id: 87, name: 'STOOL M/C/S', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 10000 },
-            { id: 88, name: 'BLOOD CULTURE', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 50000 },
-            { id: 89, name: 'URINE M/C/S', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 10000 },
-            { id: 90, name: 'SWAB', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 10000 },
-            { id: 91, name: 'SPUTUM M/C/S', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 10000 },
-            { id: 92, name: 'AFB MICROSCOPY ×3', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 45000 },
-            { id: 93, name: 'MP', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 5000 },
-            { id: 94, name: 'WIDAL', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 10000 },
-            { id: 95, name: 'PAP SMEAR', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 40000 },
-            { id: 96, name: 'HIV I&II', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 10000 },
-            { id: 97, name: 'HEPATITIS A', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 10000 },
-            { id: 98, name: 'HBSAG', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 10000 },
-            { id: 99, name: 'HCV', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 10000 },
-            { id: 100, name: 'VDRL', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 10000 },
-            { id: 101, name: 'HEPATITIS B PROFILE', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 20000 },
-            { id: 102, name: 'CSF ANALYSIS', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 15000 },
-            { id: 103, name: 'H. PYLORI', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 6000 },
-            { id: 104, name: 'OCCULT BLOOD', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 20000 },
-            { id: 105, name: 'URINE MICROSCOPY', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 10000 },
-            { id: 106, name: 'STOOL MICROSCOPY', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 10000 },
-            { id: 107, name: 'HELICOBACTER PYLORI IGM/IGA/IGG', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 60000 },
-            { id: 108, name: 'RHEUMATOID FACTOR', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 25000 },
-            { id: 109, name: 'GRAM STAIN', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 2000 },
-            { id: 110, name: 'ASO', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 30000 },
-            { id: 111, name: 'CHLAMYDIA IGM/IGG', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 80000 },
-            { id: 112, name: 'MICROFILARIA', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 15000 },
-            { id: 113, name: 'HEPATITIS B VIRUS PROFILE', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 15000 },
-            { id: 114, name: 'TORCH PANEL', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 200000 },
-            { id: 115, name: 'RUBELLA IGM/IGG', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 90000 },
-            { id: 116, name: 'TOXOPLASMA IGG/IGM', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 90000 },
-            { id: 117, name: 'HSV IGM/IGG', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 90000 },
-            { id: 118, name: 'SEMEN ANALYSIS & M/C/S', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 30000 },
-            { id: 119, name: 'SEMEN ANALYSIS', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 15000 },
-            { id: 120, name: 'HIV VIRAL LOAD & DRUG RESISTANCE', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 187000 },
-            { id: 121, name: 'HEPATITIS B VIRAL LOAD', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 50000 },
-            { id: 122, name: 'HCV GENOTYPE', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 120000 },
-            { id: 123, name: 'ANA SCREENING', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 40000 },
-            { id: 124, name: 'ANCA', category: 'MICROBIOLOGY & IMMUNOLOGY', price: 40000 },
+                        { id: 145, name: 'HAND X-RAY', category: 'X-RAY', price: 15000 },
+                        { id: 146, name: 'WRIST X-RAY', category: 'X-RAY', price: 15000 },
+                        { id: 147, name: 'FOREARM X-RAY', category: 'X-RAY', price: 15000 },
+                        { id: 148, name: 'HUMERUS X-RAY', category: 'X-RAY', price: 15000 },
+                        { id: 149, name: 'SHOULDER X-RAY', category: 'X-RAY', price: 15000 },
+                        { id: 150, name: 'SCAPULAR X-RAY', category: 'X-RAY', price: 15000 },
+                        { id: 151, name: 'FOOT X-RAY', category: 'X-RAY', price: 15000 },
+                        { id: 152, name: 'TIBIA/FIBULA X-RAY', category: 'X-RAY', price: 15000 },
+                        { id: 153, name: 'FEMUR (AP/LAT)', category: 'X-RAY', price: 15000 },
+                        { id: 154, name: 'PELVIC (AP/LAT)', category: 'X-RAY', price: 15000 },
+                        { id: 155, name: 'BOTH HIP JOINTS (AP/LAT)', category: 'X-RAY', price: 30000 },
+                        { id: 156, name: 'CHEST (AP)', category: 'X-RAY', price: 15000 },
+                        { id: 157, name: 'CHEST (AP/LAT)', category: 'X-RAY', price: 15000 },
+                        { id: 158, name: 'SKULL X-RAY', category: 'X-RAY', price: 15000 },
+                        { id: 159, name: 'PARANASAL SINUSES', category: 'X-RAY', price: 15000 },
+                        { id: 160, name: 'MANDIBLE (JAW)', category: 'X-RAY', price: 15000 },
+                        { id: 161, name: 'MAMMOGRAM', category: 'X-RAY', price: 55000 },
+                        { id: 162, name: 'NASOPHARYNX', category: 'X-RAY', price: 15000 },
+                        { id: 163, name: 'THORACIC SPINE (AP/LAT)', category: 'X-RAY', price: 15000 },
+                        { id: 164, name: 'LUMBAR SACRAL (AP/LAT)', category: 'X-RAY', price: 15000 },
+                        { id: 165, name: 'KNEE X-RAY', category: 'X-RAY', price: 15000 },
+                        { id: 166, name: 'CERVICAL X-RAY', category: 'X-RAY', price: 15000 },
+                        { id: 167, name: 'THORACIC INLET', category: 'X-RAY', price: 15000 },
+                        { id: 168, name: 'LOPOGRAM', category: 'X-RAY', price: 85000 },
+                        { id: 169, name: 'POST NASAL SPACE', category: 'X-RAY', price: 15000 },
+                        { id: 170, name: 'ABDOMINAL X-RAY', category: 'X-RAY', price: 18000 },
+                        { id: 171, name: 'SKELETAL SURVEY', category: 'X-RAY', price: 60000 },
+                        { id: 172, name: 'PITUITARY FOSSA', category: 'X-RAY', price: 15000 },
+                        { id: 173, name: 'MASTOIDS', category: 'X-RAY', price: 20000 },
+                        { id: 174, name: 'BARIUM SWALLOW', category: 'X-RAY', price: 80000 },
+                        { id: 175, name: 'BARIUM FOLLOW THROUGH', category: 'X-RAY', price: 80000 },
+                        { id: 176, name: 'BARIUM MEAL', category: 'X-RAY', price: 80000 },
+                        { id: 177, name: 'BARIUM ENEMA', category: 'X-RAY', price: 80000 },
+                        { id: 178, name: 'HSG', category: 'X-RAY', price: 65000 },
+                        { id: 179, name: 'RCUG', category: 'X-RAY', price: 80000 },
+                        { id: 180, name: 'MCUG', category: 'X-RAY', price: 80000 },
+                        { id: 181, name: 'FISTULOGRAM', category: 'X-RAY', price: 80000 },
+            
+            { id: 182, name: 'EEG', category: 'EEG', price: 70000 },
 
-            { id: 125, name: 'PELVIC ULTRASOUND', category: 'RADIOLOGY (ULTRASOUND)', price: 12000 },
-            { id: 126, name: 'ABDOMINOPELVIC SCAN', category: 'RADIOLOGY (ULTRASOUND)', price: 15000 },
-            { id: 127, name: 'OBSTETRICS SCAN', category: 'RADIOLOGY (ULTRASOUND)', price: 10000 },
-            { id: 128, name: 'THYROID SCAN', category: 'RADIOLOGY (ULTRASOUND)', price: 18000 },
-            { id: 129, name: 'BREAST SCAN', category: 'RADIOLOGY (ULTRASOUND)', price: 18000 },
-            { id: 130, name: 'TESTICULAR/SCROTAL/PROSTATE', category: 'RADIOLOGY (ULTRASOUND)', price: 18000 },
-            { id: 131, name: 'DOPPLER SCAN (DOUBLE LIMB)', category: 'RADIOLOGY (ULTRASOUND)', price: 100000 },
-            { id: 132, name: 'TRANSCRANIAL DOPPLER', category: 'RADIOLOGY (ULTRASOUND)', price: 50000 },
-            { id: 133, name: 'TESTICULAR SCAN', category: 'RADIOLOGY (ULTRASOUND)', price: 15000 },
-            { id: 134, name: 'RENAL SCAN', category: 'RADIOLOGY (ULTRASOUND)', price: 15000 },
-            { id: 135, name: 'ANOMALY SCAN', category: 'RADIOLOGY (ULTRASOUND)', price: 25000 },
-            { id: 136, name: 'TROSS (TRANSRECTAL ULTRASOUND)', category: 'RADIOLOGY (ULTRASOUND)', price: 20000 },
-            { id: 137, name: 'SONOURETHROGRAM (RCUG)', category: 'RADIOLOGY (ULTRASOUND)', price: 80000 },
-            { id: 138, name: 'ANTERIOR FONTANELLE', category: 'RADIOLOGY (ULTRASOUND)', price: 20000 },
-            { id: 139, name: 'FOLLICULAR TRACKING (3 VISIT)', category: 'RADIOLOGY (ULTRASOUND)', price: 60000 },
-            { id: 140, name: 'TRANSVAGINAL SCAN', category: 'RADIOLOGY (ULTRASOUND)', price: 18000 },
-            { id: 141, name: 'NECK ULTRASOUND', category: 'RADIOLOGY (ULTRASOUND)', price: 18000 },
-            { id: 142, name: 'SOFT TISSUE ULTRASOUND', category: 'RADIOLOGY (ULTRASOUND)', price: 15000 },
-            { id: 143, name: 'SMALL PARTS ULTRASOUND', category: 'RADIOLOGY (ULTRASOUND)', price: 15000 },
-            { id: 144, name: 'PENILE DOPPLER', category: 'RADIOLOGY (ULTRASOUND)', price: 250000 },
+            { id: 183, name: 'ECHOCARDIOGRAPHY (CHILDREN)', category: 'ECHO', price: 70000 },
+            { id: 184, name: 'ECHOCARDIOGRAPHY (ADULT)', category: 'ECHO', price: 50000 },
 
-            { id: 145, name: 'HAND X-RAY', category: 'RADIOLOGY (X-RAY)', price: 15000 },
-            { id: 146, name: 'WRIST X-RAY', category: 'RADIOLOGY (X-RAY)', price: 15000 },
-            { id: 147, name: 'FOREARM X-RAY', category: 'RADIOLOGY (X-RAY)', price: 15000 },
-            { id: 148, name: 'HUMERUS X-RAY', category: 'RADIOLOGY (X-RAY)', price: 15000 },
-            { id: 149, name: 'SHOULDER X-RAY', category: 'RADIOLOGY (X-RAY)', price: 15000 },
-            { id: 150, name: 'SCAPULAR X-RAY', category: 'RADIOLOGY (X-RAY)', price: 15000 },
-            { id: 151, name: 'FOOT X-RAY', category: 'RADIOLOGY (X-RAY)', price: 15000 },
-            { id: 152, name: 'TIBIA/FIBULA X-RAY', category: 'RADIOLOGY (X-RAY)', price: 15000 },
-            { id: 153, name: 'FEMUR (AP/LAT)', category: 'RADIOLOGY (X-RAY)', price: 15000 },
-            { id: 154, name: 'PELVIC (AP/LAT)', category: 'RADIOLOGY (X-RAY)', price: 15000 },
-            { id: 155, name: 'BOTH HIP JOINTS (AP/LAT)', category: 'RADIOLOGY (X-RAY)', price: 30000 },
-            { id: 156, name: 'CHEST (AP)', category: 'RADIOLOGY (X-RAY)', price: 15000 },
-            { id: 157, name: 'CHEST (AP/LAT)', category: 'RADIOLOGY (X-RAY)', price: 15000 },
-            { id: 158, name: 'SKULL X-RAY', category: 'RADIOLOGY (X-RAY)', price: 15000 },
-            { id: 159, name: 'PARANASAL SINUSES', category: 'RADIOLOGY (X-RAY)', price: 15000 },
-            { id: 160, name: 'MANDIBLE (JAW)', category: 'RADIOLOGY (X-RAY)', price: 15000 },
-            { id: 161, name: 'MAMMOGRAM', category: 'RADIOLOGY (X-RAY)', price: 55000 },
-            { id: 162, name: 'NASOPHARYNX', category: 'RADIOLOGY (X-RAY)', price: 15000 },
-            { id: 163, name: 'THORACIC SPINE (AP/LAT)', category: 'RADIOLOGY (X-RAY)', price: 15000 },
-            { id: 164, name: 'LUMBAR SACRAL (AP/LAT)', category: 'RADIOLOGY (X-RAY)', price: 15000 },
-            { id: 165, name: 'KNEE X-RAY', category: 'RADIOLOGY (X-RAY)', price: 15000 },
-            { id: 166, name: 'CERVICAL X-RAY', category: 'RADIOLOGY (X-RAY)', price: 15000 },
-            { id: 167, name: 'THORACIC INLET', category: 'RADIOLOGY (X-RAY)', price: 15000 },
-            { id: 168, name: 'LOPOGRAM', category: 'RADIOLOGY (X-RAY)', price: 85000 },
-            { id: 169, name: 'POST NASAL SPACE', category: 'RADIOLOGY (X-RAY)', price: 15000 },
-            { id: 170, name: 'ABDOMINAL X-RAY', category: 'RADIOLOGY (X-RAY)', price: 18000 },
-            { id: 171, name: 'SKELETAL SURVEY', category: 'RADIOLOGY (X-RAY)', price: 60000 },
-            { id: 172, name: 'PITUITARY FOSSA', category: 'RADIOLOGY (X-RAY)', price: 15000 },
-            { id: 173, name: 'MASTOIDS', category: 'RADIOLOGY (X-RAY)', price: 20000 },
-            { id: 174, name: 'BARIUM SWALLOW', category: 'RADIOLOGY (X-RAY)', price: 80000 },
-            { id: 175, name: 'BARIUM FOLLOW THROUGH', category: 'RADIOLOGY (X-RAY)', price: 80000 },
-            { id: 176, name: 'BARIUM MEAL', category: 'RADIOLOGY (X-RAY)', price: 80000 },
-            { id: 177, name: 'BARIUM ENEMA', category: 'RADIOLOGY (X-RAY)', price: 80000 },
-            { id: 178, name: 'HSG', category: 'RADIOLOGY (X-RAY)', price: 65000 },
-            { id: 179, name: 'RCUG', category: 'RADIOLOGY (X-RAY)', price: 80000 },
-            { id: 180, name: 'MCUG', category: 'RADIOLOGY (X-RAY)', price: 80000 },
-            { id: 181, name: 'FISTULOGRAM', category: 'RADIOLOGY (X-RAY)', price: 80000 },
+            { id: 185, name: 'ECG', category: 'ECG', price: 10000 },
 
-            { id: 182, name: 'EEG', category: 'ENDOLUMINAL & CARDIAC STUDIES', price: 70000 },
-            { id: 183, name: 'ECHOCARDIOGRAPHY (CHILDREN)', category: 'ENDOLUMINAL & CARDIAC STUDIES', price: 70000 },
-            { id: 184, name: 'ECHOCARDIOGRAPHY (ADULT)', category: 'ENDOLUMINAL & CARDIAC STUDIES', price: 50000 },
-            { id: 185, name: 'ECG', category: 'ENDOLUMINAL & CARDIAC STUDIES', price: 10000 },
-            { id: 186, name: '24 HOURS HOLTER ECG', category: 'ENDOLUMINAL & CARDIAC STUDIES', price: 100000 },
-            { id: 187, name: 'COLONOSCOPY', category: 'ENDOLUMINAL & CARDIAC STUDIES', price: 205000 },
-            { id: 188, name: 'GASTROSCOPY', category: 'ENDOLUMINAL & CARDIAC STUDIES', price: 195000 },
-            { id: 189, name: 'PHARYNGOSCOPY', category: 'ENDOLUMINAL & CARDIAC STUDIES', price: 185000 },
-            { id: 190, name: 'ESOPHAGOSCOPY', category: 'ENDOLUMINAL & CARDIAC STUDIES', price: 185000 },
-            { id: 191, name: 'MEDICAL EXAMINATION', category: 'ENDOLUMINAL & CARDIAC STUDIES', price: 50000 },
+            { id: 186, name: '24 HOURS HOLTER ECG', category: '24 HOURS HOLTER ECG', price: 100000 },
+
+            { id: 187, name: 'COLONOSCOPY', category: 'COLONOSCOPY', price: 205000 },
+
+            { id: 188, name: 'GASTROSCOPY', category: 'GASTROSCOPY', price: 195000 },
+
+            { id: 189, name: 'PHARYNGOSCOPY', category: 'PHARYNGOSCOPY', price: 185000 },
+
+            { id: 190, name: 'ESOPHAGOSCOPY', category: 'ESOPHAGOSCOPY', price: 185000 },
+
+            { id: 191, name: 'MEDICAL EXAMINATION', category: 'MEDICAL EXAMINATION', price: 50000 },
 
             { id: 192, name: 'CT BRAIN/HEAD', category: 'CT SCAN', price: 80000 },
             { id: 193, name: 'CT BRAIN + CERVICAL SPINE', category: 'CT SCAN', price: 160000 },
@@ -1526,6 +1565,18 @@ function prepareForSave(data) {
 // Debounced Auto-Save (prevents saving too often)
 let saveTimeout;
 
+// Debounce timer for inventory suggestions to smooth typing
+let inventorySuggestTimeout = null;
+
+// Debounce timer for split payment inputs to smooth typing
+let splitPaymentTimeout = null;
+
+// Debounce timer for records search suggestions
+let recordsSuggestTimeout = null;
+
+// Debounce timer for history suggestions
+let historySuggestTimeout = null;
+
 function autoSave() {
     clearTimeout(saveTimeout);
     saveTimeout = setTimeout(() => {
@@ -1565,7 +1616,8 @@ async function loadData() {
             users = loadedData.users || [];
             prList = loadedData.prList || prList;
             inventory = loadedData.inventory || inventory;
-            appState.drafts = loadedData.drafts || [];
+            // Normalize saved drafts so older saves or malformed entries don't break the billing flow
+            appState.drafts = (loadedData.drafts || []).map(d => ensureBillingDataShape(d));
 
             // Rehydrate orders
             orders = (loadedData.orders || []).map(order => ({
@@ -1605,6 +1657,115 @@ async function loadData() {
             logAction('SAVE_DRAFT', `Saved draft for '${draftData.patientName}'.`);
             autoSave();
         }
+
+        // Ensure billing data has required fields and sensible defaults (used when loading drafts)
+        function ensureBillingDataShape(data) {
+            const defaults = {
+                patientName: '', pid: '', contact: '', referredBy: '', staffName: appState.currentUser ? appState.currentUser.fullName : '',
+                selectedServices: [], discount: 0, total: 0, paymentMethod: 'cash', amountPaid: 0, balance: 0, paymentStatus: 'full',
+                splitPayments: { cash: 0, pos: 0, transfer: 0 }
+            };
+
+            const normalized = Object.assign({}, defaults, data || {});
+            // Ensure selectedServices is an array
+            if (!Array.isArray(normalized.selectedServices)) normalized.selectedServices = [];
+            // Ensure splitPayments has required keys
+            normalized.splitPayments = Object.assign({}, defaults.splitPayments, normalized.splitPayments || {});
+            // Numeric coercions
+            normalized.discount = parseFloat(normalized.discount) || 0;
+            normalized.amountPaid = parseFloat(normalized.amountPaid) || 0;
+            normalized.balance = parseFloat(normalized.balance) || 0;
+
+            return normalized;
+        }
+
+        // Reset billing data to defaults and clear step
+        function resetBillingData() {
+            appState.billingData = ensureBillingDataShape({});
+            appState.billingStep = 1;
+        }
+
+        // Determine whether the billing form appears to have unsaved content
+        function hasUnsavedBilling() {
+            const b = appState.billingData || {};
+            if (!b) return false;
+            const hasContent = Boolean((b.patientName && b.patientName.trim()) || (b.selectedServices && b.selectedServices.length > 0) || b.discount > 0 || b.amountPaid > 0 || b.splitPayments && (b.splitPayments.cash || b.splitPayments.pos || b.splitPayments.transfer) || appState.billingStep > 1);
+            return hasContent;
+        }
+
+        // Show a navigation confirmation modal offering Save / Discard / Cancel
+        function showNavigateAwayModal(targetView) {
+            appState.modal = {
+                type: 'navConfirm',
+                target: targetView,
+                title: 'Unsaved Billing',
+                message: 'You have an in-progress billing. Would you like to save it as a draft before leaving?'
+            };
+            renderApp();
+        }
+
+        // Show a cancel confirmation specifically for the Cancel button on billing
+        function showCancelBillingModal() {
+            appState.modal = {
+                type: 'cancelBilling',
+                title: 'Cancel Billing',
+                message: 'Are you sure you want to cancel this billing? You can save it as a draft or discard changes.'
+            };
+            renderApp();
+        }
+
+        function handleNavConfirmSave() {
+            if (!appState.modal) return;
+            if (appState.modal.type === 'navConfirm') {
+                // Ensure we have a patient name before saving a draft
+                if (!appState.billingData.patientName || !appState.billingData.patientName.trim()) {
+                    alert('Cannot save draft: patient name is required to save a draft.');
+                    return;
+                }
+                saveDraft();
+                const target = appState.modal.target;
+                appState.modal = null;
+                appState.currentView = target;
+                appState.billingStep = 1;
+                // Keep the draft and reset the current billing form
+                resetBillingData();
+                renderApp();
+            } else if (appState.modal.type === 'cancelBilling') {
+                if (!appState.billingData.patientName || !appState.billingData.patientName.trim()) {
+                    alert('Cannot save draft: patient name is required to save a draft.');
+                    return;
+                }
+                // Save draft and keep user on billing (but reset the current form)
+                saveDraft();
+                appState.modal = null;
+                resetBillingData();
+                renderApp();
+            }
+        }
+
+        function handleNavConfirmDiscard() {
+            if (appState.modal && (appState.modal.type === 'navConfirm' || appState.modal.type === 'cancelBilling')) {
+                const target = appState.modal.target || null;
+                appState.modal = null;
+                // discard changes and either navigate (if target) or stay on billing but reset
+                resetBillingData();
+                if (target) {
+                    appState.currentView = target;
+                }
+                renderApp();
+            }
+        }
+
+        function handleNavConfirmCancel() {
+            // Close the modal and do nothing
+            appState.modal = null;
+            renderApp();
+        }
+
+        // Public cancel function attached to Cancel buttons
+        function cancelBilling() {
+            showCancelBillingModal();
+        }
         
 
         function generatePID() {
@@ -1614,6 +1775,20 @@ async function loadData() {
         function formatCurrency(amount) {
             if (amount === null || amount === undefined || isNaN(Number(amount))) return 'N/A';
             return '₦' + Number(amount).toLocaleString('en-NG', { minimumFractionDigits: 2 });
+        }
+
+        // Safely escape text for inclusion in HTML fragments
+        function escapeHtml(str) {
+            if (!str && str !== 0) return '';
+            return String(str).replace(/[&<>"]+/g, function (s) {
+                switch (s) {
+                    case '&': return '&amp;';
+                    case '<': return '&lt;';
+                    case '>': return '&gt;';
+                    case '"': return '&quot;';
+                    default: return s;
+                }
+            });
         }
 
         function calculateDiscount(total, discountAmount) {
@@ -1649,6 +1824,14 @@ async function loadData() {
                 .reduce((sum, order) => sum + order.total, 0);
         }
 
+        function getTodaysDiscounts() {
+            const todayString = new Date().toISOString().split('T')[0];
+            return orders
+                .filter(order => new Date(order.date).toISOString().split('T')[0] === todayString)
+                .reduce((sum, order) => sum + (order.discount || 0), 0);
+        }
+
+
         function getFilteredStats() {
             const { start, end } = appState.analyticsDateRange;
             const startDate = new Date(start);
@@ -1660,7 +1843,8 @@ async function loadData() {
             });
 
             const totalRevenue = filteredOrders.reduce((sum, order) => sum + order.total, 0);
-            return { totalRevenue, orderCount: filteredOrders.length };
+            const totalDiscounts = filteredOrders.reduce((sum, order) => sum + (order.discount || 0), 0);
+            return { totalRevenue, orderCount: filteredOrders.length, totalDiscounts };
         }
 
         function getTopTests() {
@@ -1699,19 +1883,24 @@ async function loadData() {
         }
 
         function getPRPerformance() {
-            const prStats = {};
-            orders.forEach(order => {
-                if (!prStats[order.referredBy]) {
-                    prStats[order.referredBy] = { orders: 0, revenue: 0 };
-                }
-                prStats[order.referredBy].orders += 1;
-                prStats[order.referredBy].revenue += order.total;
-            });
-
-            return Object.entries(prStats)
-                .map(([name, stats]) => ({ name, ...stats }))
-                .sort((a, b) => b.revenue - a.revenue);
+    const prStats = {};
+    orders.forEach(order => {
+        if (!prStats[order.referredBy]) {
+            prStats[order.referredBy] = { orders: 0, revenue: 0 };
         }
+        prStats[order.referredBy].orders += 1;
+        prStats[order.referredBy].revenue += order.total;
+    });
+
+    return Object.entries(prStats)
+        .map(([name, stats]) => ({
+            name,
+            orders: stats.orders,
+            revenue: stats.revenue
+        }))
+        .sort((a, b) => b.revenue - a.revenue);
+}
+
 
         function getPaymentStats() {
             const stats = {
@@ -1721,44 +1910,56 @@ async function loadData() {
             return stats;
         }
 
-        function getFilteredPRPerformance() {
-            const { start, end } = appState.analyticsDateRange;
-            const startDate = new Date(start);
-            const endDate = new Date(end);
+       function getFilteredPRPerformance() {
+    const { start, end } = appState.analyticsDateRange;
+    const startDate = new Date(start);
+    const endDate = new Date(end);
 
-            const prStats = {};
-            orders.filter(order => {
-                const orderDate = new Date(order.date);
-                return orderDate >= startDate && orderDate <= endDate;
-            }).forEach(order => {
-                if (!prStats[order.referredBy]) prStats[order.referredBy] = { orders: 0, revenue: 0 };
-                prStats[order.referredBy].orders++;
-                prStats[order.referredBy].revenue += order.total;
-            });
-
-            return Object.entries(prStats)
-                .map(([name, stats]) => ({ name, ...stats }))
-                .sort((a, b) => b.revenue - a.revenue);
+    const prStats = {};
+    orders.filter(order => {
+        const orderDate = new Date(order.date);
+        return orderDate >= startDate && orderDate <= endDate;
+    }).forEach(order => {
+        if (!prStats[order.referredBy]) {
+            prStats[order.referredBy] = { orders: 0, revenue: 0 };
         }
+        prStats[order.referredBy].orders++;
+        prStats[order.referredBy].revenue += order.total;
+    });
 
-        function getDailyPRPerformance(date) {
-            const dateString = date.toISOString().split('T')[0];
-            const prStats = {};
-            orders.filter(order => new Date(order.date).toISOString().split('T')[0] === dateString)
-                .forEach(order => {
-                    if (order.referredBy && order.referredBy !== 'Not Specified') {
-                        if (!prStats[order.referredBy]) {
-                            prStats[order.referredBy] = { orders: 0, revenue: 0 };
-                        }
-                        prStats[order.referredBy].orders += 1;
-                        prStats[order.referredBy].revenue += order.total;
-                    }
-                });
+    return Object.entries(prStats)
+        .map(([name, stats]) => ({
+            name,
+            orders: stats.orders,
+            revenue: stats.revenue
+        }))
+        .sort((a, b) => b.revenue - a.revenue);
+}
 
-            return Object.entries(prStats)
-                .map(([name, stats]) => ({ name, ...stats }))
-                .sort((a, b) => b.orders - a.orders); // Sort by number of referrals
+
+       function getDailyPRPerformance(date) {
+    const dateString = date.toISOString().split('T')[0];
+    const prStats = {};
+
+    orders.filter(order =>
+        new Date(order.date).toISOString().split('T')[0] === dateString
+    ).forEach(order => {
+        if (!prStats[order.referredBy]) {
+            prStats[order.referredBy] = { orders: 0, revenue: 0 };
         }
+        prStats[order.referredBy].orders++;
+        prStats[order.referredBy].revenue += order.total;
+    });
+
+    return Object.entries(prStats)
+        .map(([name, stats]) => ({
+            name,
+            orders: stats.orders,
+            revenue: stats.revenue
+        }))
+        .sort((a, b) => b.orders - a.orders);
+}
+
 
         function getDailyTopTests(date) {
             const dateString = date.toISOString().split('T')[0];
@@ -1808,19 +2009,61 @@ async function loadData() {
             orders
                 .filter(order => new Date(order.date).toISOString().split('T')[0] === dateString)
                 .forEach(order => {
+                    // Calculate the subtotal of services before any discount
+                    const subtotal = order.services.reduce((sum, service) => sum + (service.price || 0), 0);
+
+                    // Determine the discount ratio. If subtotal is 0, ratio is 0.
+                    const discountRatio = (subtotal > 0 && order.discount > 0) ? order.discount / subtotal : 0;
+
                     order.services.forEach(service => {
                         const category = service.category || 'Uncategorized';
-                        const price = service.price || 0;
+                        const originalPrice = service.price || 0;
+
+                        // Calculate the effective price after applying the proportional discount
+                        const effectivePrice = originalPrice * (1 - discountRatio);
 
                         if (!summary[category]) {
                             summary[category] = { testCount: 0, totalAmount: 0 };
                         }
                         summary[category].testCount++;
-                        summary[category].totalAmount += price;
+                        summary[category].totalAmount += effectivePrice;
                     });
                 });
 
             return Object.entries(summary).map(([category, data]) => ({ category, ...data }));
+        }
+
+        function getFilteredRecords() {
+            const filters = appState.recordFilters;
+            let filtered = [...orders];
+
+            // Handle different filter types
+            if (filters.filterType === 'date' && filters.date) {
+                filtered = filtered.filter(order => new Date(order.date).toISOString().split('T')[0] === filters.date);
+            } else if (filters.filterType === 'month' && filters.month) {
+                const [year, month] = filters.month.split('-');
+                filtered = filtered.filter(order => {
+                    const orderDate = new Date(order.date);
+                    return orderDate.getFullYear() == year && (orderDate.getMonth() + 1) == month;
+                });
+            } else if (filters.filterType === 'year' && filters.year) {
+                filtered = filtered.filter(order => new Date(order.date).getFullYear() == filters.year);
+            } else if (!filters.searchAllRecords) {
+                // Default to daily view if no specific filter is set and not searching all
+                const viewDate = new Date(appState.recordsViewDate).toISOString().split('T')[0];
+                filtered = filtered.filter(order => new Date(order.date).toISOString().split('T')[0] === viewDate);
+            }
+
+            // Apply search query on top of date filters
+            if (filters.searchQuery) {
+                const query = filters.searchQuery.toLowerCase();
+                filtered = filtered.filter(order =>
+                    order.patientName.toLowerCase().includes(query) ||
+                    order.pid.toLowerCase().includes(query)
+                );
+            }
+
+            return filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
         }
 
         function getFilteredRecords() {
@@ -1835,8 +2078,6 @@ async function loadData() {
                     return orderDate === viewDate;
                 });
             }
-
-
             // 2. Apply search query
             if (filters.searchQuery) {
                 const query = filters.searchQuery.toLowerCase();
@@ -1977,14 +2218,15 @@ async function loadData() {
                     </div>
                 `;
             },
-            Login: {
+
+         Login: {
                 render: ({ companyProfile }) => {
                     // If no users exist, show setup form for first admin
                     if (users.length === 0) {
                         return components.Login.setupForm({ companyProfile });
                     }
                     // Normal login form
-                    return components.Login.loginForm({ companyProfile });
+                    return components.Login.Form({ companyProfile });
                 },
                 setupForm: ({ companyProfile }) => `
                     <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);">
@@ -2025,7 +2267,33 @@ async function loadData() {
                         </div>
                     </div>
                 `,
-                loginForm: ({ companyProfile }) => `
+                handleLogin: function() {
+                    const username = document.getElementById('loginUsername').value.trim();
+                    const password = document.getElementById('loginPassword').value;
+                    if (!username || !password) {
+                        alert('Please enter both username and password');
+                        // Focus username for user convenience
+                        document.getElementById('loginUsername').focus();
+                        return;
+                    }
+                    // Check if user exists in the users array
+                    const user = users.find(u => u.username === username);
+                    if (user && user.password === password) {
+                        appState.currentUser = { username, role: user.role, fullName: user.fullName };
+                        logAction('LOGIN', `User '${user.fullName}' logged in.`);
+                        appState.currentView = 'dashboard';
+                        renderApp();
+                    } else {
+                        alert('Invalid username or password. If no users exist, please set up the first admin user.');
+                        // Clear password and focus username for retry
+                        document.getElementById('loginPassword').value = '';
+                        document.getElementById('loginUsername').focus();
+                        // Do NOT call renderApp() here, just allow user to retry
+                    }
+                },
+                 
+                
+                Form: ({ companyProfile }) => `
                     <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);">
                         <div class="card" style="width: 100%; max-width: 400px; transform: scale(1); animation: popIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);">
                             <div style="text-align: center; margin-bottom: 2rem;">
@@ -2044,61 +2312,61 @@ async function loadData() {
                                     <button type="button" data-toggle-for="loginPassword" onclick="togglePasswordVisibility('loginPassword')" style="position: absolute; right: 0.5rem; background: none; border: none; cursor: pointer; font-size: 1.25rem; color: var(--text-secondary);">&#128065;</button>
                                 </div>
                             </div>
-                            <button onclick="handleLogin()" class="btn-primary" style="width: 100%; padding: 0.75rem; font-size: 1rem; margin-top: 1rem;">
+                            <button onclick="components.Login.handleLogin()" class="btn-primary" style="width: 100%; padding: 0.75rem; font-size: 1rem; margin-top: 1rem;">
                                 Sign In
                             </button>
                         </div>
                     </div>
                 `
             },
-            // Placeholder for other components to be added
-        };
+    // Placeholder for other components
+};
 
-        // ====== RENDER FUNCTIONS ======
-        function loadPreferences() {
-            // Load theme
-            const savedTheme = localStorage.getItem('appTheme') || 'light';
-            const savedColorTheme = localStorage.getItem('appColorTheme') || 'blue';
-            
-            appState.theme = savedTheme;
-            appState.colorTheme = savedColorTheme;
-            
-            // Load company profile
-            const savedProfile = localStorage.getItem('companyProfile');
-            if (savedProfile) {
-                appState.companyProfile = JSON.parse(savedProfile);
-            }
+// ====== RENDER FUNCTIONS ======
+const loadPreferences = function() {
+    // Load theme
+    const savedTheme = localStorage.getItem('appTheme') || 'light';
+    const savedColorTheme = localStorage.getItem('appColorTheme') || 'blue';
+    
+    appState.theme = savedTheme;
+    appState.colorTheme = savedColorTheme;
+    
+    // Load company profile
+    const savedProfile = localStorage.getItem('companyProfile');
+    if (savedProfile) {
+        appState.companyProfile = JSON.parse(savedProfile);
+    }
 
-            applyTheme();
-        }
+    applyTheme();
+}
 
-        function applyTheme() {
-            const html = document.documentElement;
-            
-            if (appState.theme === 'dark') {
-                html.classList.add('dark-mode');
-            } else {
-                html.classList.remove('dark-mode');
-            }
-            
-            // Remove all theme classes and add the active one
-            html.classList.remove('theme-blue', 'theme-skyblue', 'theme-gray', 'theme-brown', 'theme-green', 'theme-purple');
-            html.classList.add(`theme-${appState.colorTheme}`);
-            
-            // Save preferences
-            localStorage.setItem('appTheme', appState.theme);
-            localStorage.setItem('appColorTheme', appState.colorTheme);
-        }
+function applyTheme() {
+    const html = document.documentElement;
+    
+    if (appState.theme === 'dark') {
+        html.classList.add('dark-mode');
+    } else {
+        html.classList.remove('dark-mode');
+    }
+    
+    // Remove all theme classes and add the active one
+    html.classList.remove('theme-blue', 'theme-skyblue', 'theme-gray', 'theme-brown', 'theme-green', 'theme-purple');
+    html.classList.add(`theme-${appState.colorTheme}`);
+    
+    // Save preferences
+    localStorage.setItem('appTheme', appState.theme);
+    localStorage.setItem('appColorTheme', appState.colorTheme);
+}
 
-        function updateHeaderDateTime() {
-            const timeEl = document.getElementById('header-time');
-            const dateEl = document.getElementById('header-date');
-            if (timeEl && dateEl) {
-                const now = new Date();
-                timeEl.textContent = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-                dateEl.textContent = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-            }
-        }
+function updateHeaderDateTime() {
+    const timeEl = document.getElementById('header-time');
+    const dateEl = document.getElementById('header-date');
+    if (timeEl && dateEl) {
+        const now = new Date();
+        timeEl.textContent = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        dateEl.textContent = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    }
+}
 
         function renderDashboard() {
             const todayString = new Date().toISOString().split('T')[0];
@@ -2159,6 +2427,10 @@ async function loadData() {
                             <div style="padding: 1rem; background-color: var(--background); border-radius: 0.5rem;">
                                 <p style="color: var(--text-secondary); font-size: 0.875rem;">Today's Patients</p>
                                 <p style="font-size: 1.75rem; font-weight: 700; color: var(--primary);">${todaysOrders.length}</p>
+                            </div>
+                            <div style="padding: 1rem; background-color: var(--background); border-radius: 0.5rem;">
+                                <p style="color: var(--text-secondary); font-size: 0.875rem;">Today's Discounts</p>
+                                <p style="font-size: 1.75rem; font-weight: 700; color: var(--warning);">${formatCurrency(getTodaysDiscounts())}</p>
                             </div>
                             <div style="padding: 1rem; background-color: var(--background); border-radius: 0.5rem;">
                                 <p style="color: var(--text-secondary); font-size: 0.875rem;">Today's Full Payments</p>
@@ -2304,6 +2576,7 @@ async function loadData() {
 
                             <div style="display: flex; gap: 1rem; margin-top: 2rem;">
                                 <button onclick="billingStep(2)" class="btn-primary">Next: Select Services</button>
+                                <button onclick="cancelBilling()" class="btn-secondary" title="Cancel billing and reset form">Cancel</button>
                             </div>
                         </div>
                     </div>
@@ -2372,7 +2645,8 @@ async function loadData() {
 
                             <div style="display: flex; gap: 1rem;">
                                 <button onclick="billingStep(1)" class="btn-secondary">← Back</button>
-                                <button onclick="billingStep(3)" class="btn-primary">Next: Finalize Payment</button>
+                                <button onclick="finalizeBilling()" class="btn-primary">Finalize Payment</button>
+                                <button onclick="cancelBilling()" class="btn-secondary" title="Cancel billing and reset form">Cancel</button>
                             </div>
                         </div>
                     </div>
@@ -2579,12 +2853,22 @@ async function loadData() {
                         </div>
                     ` : ''}
 
-                    <div class="card">
-                        <!-- Search Bar -->
-                        <div class="form-group" style="margin-bottom: 2rem;">
-                            <label class="form-label">Search for a Test or Service</label>
-                            <input type="text" id="inventorySearch" class="form-input" placeholder="Type to search..." value="${appState.inventorySearchQuery}" oninput="appState.inventorySearchQuery = this.value; renderApp();">
-                        </div>
+                   <div class="form-group" style="margin-bottom: 2rem; position: relative;">
+  <label class="form-label">Search for a Test or Service</label>
+
+  <input
+    type="text"
+    id="inventorySearch"
+    class="form-input"
+    placeholder="Type to search..."
+    autocomplete="off"
+    value="${appState.inventorySearchQuery || ''}"
+    oninput="appState.inventorySearchQuery = this.value; renderInventorySuggestions(this.value);">
+
+  <!-- Auto-complete dropdown -->
+  <div id="inventorySuggestions" class="autocomplete-box"></div>
+</div>
+
 
 
                         <table class="table">
@@ -2610,7 +2894,7 @@ async function loadData() {
                                         </tr>
                                         ${groups[cat].map(item => {
                                             if (appState.editingInventoryId === item.id) {
-                                                return `
+                                                return ` 
                                                     <tr class="animate-fade-in">
                                                         <td><input type="text" id="editInventoryName-${item.id}" value="${item.name}" class="form-input"></td>
                                                         <td><input type="text" id="editInventoryCategory-${item.id}" value="${item.category}" class="form-input"></td>
@@ -2619,7 +2903,7 @@ async function loadData() {
                                                     </tr>
                                                 `;
                                             }
-                                            return `
+                                            return `<tr id="inventory-item-${item.id}">
                                                 <tr>
                                                     <td><strong>${item.name}</strong></td>
                                                     <td><span class="badge badge-primary">${item.category}</span></td>
@@ -2675,9 +2959,10 @@ async function loadData() {
 
                     <div class="card">
                         <!-- Search Bar -->
-                        <div class="form-group" style="margin-bottom: 2rem;">
+                        <div class="form-group" style="margin-bottom: 2rem; position: relative;">
                             <label class="form-label">Search by PR Name or Phone</label>
-                            <input type="text" id="prSearch" class="form-input" placeholder="Type to search..." value="${appState.recordFilters.prManagementSearchQuery}" oninput="appState.recordFilters.prManagementSearchQuery = this.value; renderApp();">
+                            <input type="text" id="prSearch" class="form-input" placeholder="Type to search..." value="${appState.recordFilters.prManagementSearchQuery}" oninput="appState.recordFilters.prManagementSearchQuery = this.value; renderPRManagementSuggestions(this.value);" autocomplete="off">
+                            <div id="prManagementSuggestions" class="autocomplete-box"></div>
                         </div>
 
 
@@ -2710,7 +2995,7 @@ async function loadData() {
                                     }
                                     const referralCount = orders.filter(order => order.referredBy === pr.name).length;
                                     return `
-                                        <tr>
+                                        <tr id="pr-item-${pr.id}">
                                             <td><strong>${pr.name}</strong></td>
                                             <td>${pr.phone}</td>
                                             <td style="font-weight: 700; color: var(--primary);">${referralCount}</td>
@@ -2782,6 +3067,11 @@ async function loadData() {
                             <p class="stat-label">Total Income (Selected Period)</p>
                             <p class="stat-value" style="color: var(--success);">${formatCurrency(filteredStats.totalRevenue)}</p>
                             <p style="font-size: 0.75rem; color: var(--text-secondary);">${filteredStats.orderCount} orders in period</p>
+                        </div>
+                        <div class="stat-box animate-slide-up" style="border-left: 4px solid var(--accent); animation-delay: 0.1s;">
+                            <p class="stat-label">Total Discounts (Selected Period)</p>
+                            <p class="stat-value" style="color: var(--accent);">${formatCurrency(filteredStats.totalDiscounts)}</p>
+                            <p style="font-size: 0.75rem; color: var(--text-secondary);">Value given to patients</p>
                         </div>
                         <div class="stat-box animate-slide-up" style="border-left: 4px solid var(--warning); animation-delay: 0.1s;">
                             <p class="stat-label">Outstanding Balance (All Time)</p>
@@ -2962,15 +3252,34 @@ async function loadData() {
             if (!draft) return;
 
             if (confirm(`This will replace any current billing information. Continue with draft for "${draft.patientName}"?`)) {
-                // Deep copy the draft data to avoid reference issues
-                appState.billingData = JSON.parse(JSON.stringify(draft));
+                // Deep copy and normalize the draft data to avoid missing fields or invalid types
+                const raw = JSON.parse(JSON.stringify(draft));
+                appState.billingData = ensureBillingDataShape(raw);
                 appState.billingStep = draft.billingStep || 1;
                 appState.currentView = 'billing';
+
+                // Close any open modals/overlays that might remain set and block the UI
+                appState.viewingOrderId = null;
+                appState.editingPRId = null;
+                appState.editingInventoryId = null;
+                appState.showAddPRForm = false;
+                appState.showAddInventoryForm = false;
                 
                 // Remove the draft from the list now that it's loaded
                 appState.drafts.splice(index, 1);
                 autoSave();
                 renderApp();
+
+                // Give the UI a moment to mount then ensure billing UI is interactive and up-to-date
+                setTimeout(() => {
+                    try {
+                        updateBillingCalculations();
+                        const patientNameInput = document.getElementById('patientName');
+                        if (patientNameInput) patientNameInput.focus();
+                    } catch (e) {
+                        console.warn('Error while finalizing draft load:', e);
+                    }
+                }, 60);
             }
         }
 
@@ -3064,6 +3373,50 @@ async function loadData() {
             `;
         }
 
+        function renderAdvancedFilter() {
+            const filters = appState.recordFilters;
+            return `
+                <div class="filter-section">
+                    <div class="filter-group">
+                        <label>Filter By</label>
+                        <select class="form-select" onchange="updateFilterType(this.value)">
+                            <option value="all" ${filters.filterType === 'all' ? 'selected' : ''}>Daily View</option>
+                            <option value="date" ${filters.filterType === 'date' ? 'selected' : ''}>Specific Date</option>
+                            <option value="month" ${filters.filterType === 'month' ? 'selected' : ''}>Month</option>
+                            <option value="year" ${filters.filterType === 'year' ? 'selected' : ''}>Year</option>
+                        </select>
+                    </div>
+
+                    ${filters.filterType === 'date' ? `
+                        <div class="filter-group">
+                            <label>Date</label>
+                            <input type="date" class="form-input" value="${filters.date}" onchange="updateFilter('date', this.value)">
+                        </div>
+                    ` : ''}
+
+                    ${filters.filterType === 'month' ? `
+                        <div class="filter-group">
+                            <label>Month</label>
+                            <input type="month" class="form-input" value="${filters.month}" onchange="updateFilter('month', this.value)">
+                        </div>
+                    ` : ''}
+
+                    ${filters.filterType === 'year' ? `
+                        <div class="filter-group">
+                            <label>Year</label>
+                            <input type="number" class="form-input" placeholder="YYYY" value="${filters.year}" onchange="updateFilter('year', this.value)">
+                        </div>
+                    ` : ''}
+
+                    <div class="filter-group">
+                        <label>&nbsp;</label>
+                        <button onclick="clearFilters()" class="btn-secondary">Clear Filters</button>
+                    </div>
+                </div>
+            `;
+        }
+
+
         function renderRecords() {
             const filteredRecords = getFilteredRecords();
             
@@ -3072,6 +3425,9 @@ async function loadData() {
                     <h2 style="font-size: 2rem; font-weight: 700; margin-bottom: 2rem;">Patient Records</h2>
 
                     <!-- Daily Record Navigation and Search -->
+                    <div class="card animate-slide-up" style="margin-bottom: 2rem;">
+                        ${renderAdvancedFilter()}
+                    </div>
                     <div class="card animate-slide-up" style="margin-bottom: 2rem;">
                         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
                             <h3 style="font-weight: 700; font-size: 1.25rem;" class="${appState.recordFilters.searchAllRecords ? 'disabled-text' : ''}">
@@ -3095,9 +3451,10 @@ async function loadData() {
                         </div>
                         <div style="border-top: 1px solid var(--border); margin-top: 1.5rem; padding-top: 1.5rem;">
                             <div style="display: flex; gap: 1.5rem; align-items: center;">
-                                <div class="form-group" style="flex: 1; margin-bottom: 0;">
+                                <div class="form-group" style="flex: 1; margin-bottom: 0; position: relative;">
                                     <label class="form-label">Search by Patient Name or PID</label>
-                                    <input type="text" id="searchQuery" class="form-input" placeholder="Type to search..." value="${appState.recordFilters.searchQuery}" oninput="updateFilter('searchQuery', this.value)">
+                                    <input type="text" id="searchQuery" class="form-input" placeholder="Type to search..." value="${appState.recordFilters.searchQuery}" oninput="appState.recordFilters.searchQuery = this.value; renderRecordsSuggestions(this.value);" autocomplete="off">
+                                    <div id="recordsSuggestions" class="autocomplete-box"></div>
                                 </div>
                                 <div class="form-group" style="margin-bottom: 0; display: flex; align-items: center; gap: 0.5rem; padding-top: 1.5rem;">
                                     <input type="checkbox" id="searchAllRecords" onchange="updateFilter('searchAllRecords', this.checked)" ${appState.recordFilters.searchAllRecords ? 'checked' : ''} style="width: 1.25rem; height: 1.25rem;">
@@ -3137,7 +3494,7 @@ async function loadData() {
                                 </thead>
                                 <tbody>
                                     ${filteredRecords.length > 0 ? filteredRecords.map(order => `
-                                        <tr>
+                                        <tr id="record-item-${order.id}">
                                             <td><a href="#" onclick="viewOrderDetails(${order.id})" style="color: var(--primary); text-decoration: underline; font-weight: 500;">${order.patientName}</a></td>
                                             <td><strong>${order.pid}</strong></td>
                                             <td style="font-size: 0.85rem;">${order.services.map(s => (typeof s === 'string') ? s : (s && s.name ? s.name : '')).join(', ')}</td>
@@ -3168,7 +3525,32 @@ async function loadData() {
         }
 
         function renderOrderDetailsModal() {
-            if (appState.viewingOrderId === null) return '';
+            if (appState.viewingOrderId === null && !appState.modal) return '';
+
+            // If a generic modal is present, render it here (ensures it overlays above everything)
+            if (appState.modal) {
+                const m = appState.modal;
+                if (m.type === 'navConfirm' || m.type === 'cancelBilling') {
+                    const title = m.title || 'Confirm';
+                    const message = m.message || '';
+                    return `
+                        <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 3000;">
+                            <div class="card animate-pop" style="width: 90%; max-width: 520px;">
+                                <div style="display:flex; justify-content: space-between; align-items:center; margin-bottom: 1rem;">
+                                    <h3 style="font-size: 1.25rem; font-weight:700;">${escapeHtml(title)}</h3>
+                                    <button onclick="handleNavConfirmCancel()" style="background:none; border:none; font-size:1.25rem; cursor:pointer;">&times;</button>
+                                </div>
+                                <div style="margin-bottom: 1rem; color:var(--text-secondary);">${escapeHtml(message)}</div>
+                                <div style="display:flex; gap:0.5rem; justify-content:flex-end; margin-top: 1rem;">
+                                    <button class="btn-primary" onclick="handleNavConfirmSave()">Save Draft & Continue</button>
+                                    <button class="btn-secondary" onclick="handleNavConfirmDiscard()">Discard & Continue</button>
+                                    <button class="btn-secondary" onclick="handleNavConfirmCancel()">Cancel</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
 
             const order = orders.find(o => o.id === appState.viewingOrderId);
             if (!order) return '';
@@ -3216,6 +3598,46 @@ async function loadData() {
                     </div>
                 </div>
             `;
+        }
+        
+        function saveCategoryRename(oldName, event) {
+            const newNameInput = document.getElementById(`edit-category-input-${oldName}`);
+            if (!newNameInput) return;
+
+            const newName = newNameInput.value.trim();
+            if (!newName) {
+                alert('Category name cannot be empty.');
+                return;
+            }
+
+            if (newName === oldName) {
+                // No change, just cancel the edit
+                appState.editingCategoryName = null;
+                renderApp();
+                return;
+            }
+
+            // Check if the new category name already exists
+            const allCategories = [...new Set(inventory.map(item => item.category))];
+            if (allCategories.some(cat => cat.toLowerCase() === newName.toLowerCase())) {
+                alert(`The category "${newName}" already exists. Please choose a unique name.`);
+                return;
+            }
+
+            // Proceed with renaming
+            inventory.forEach(item => {
+                if (item.category === oldName) {
+                    item.category = newName;
+                }
+            });
+
+            logAction('RENAME_CATEGORY', `Renamed category from '${oldName}' to '${newName}'. This affected all associated tests.`);
+            autoSave();
+
+            // Exit editing mode and re-render
+            appState.editingCategoryName = null;
+            renderApp();
+            alert(`Category '${oldName}' has been successfully renamed to '${newName}'.`);
         }
 
         function handleChangePassword() {
@@ -3265,6 +3687,44 @@ async function loadData() {
                 { name: 'Purple', id: 'purple', colors: ['#6b21a8', '#9333ea'] }
             ];
 
+            const categoryManagementSection = () => {
+                const allCategories = [...new Set(inventory.map(item => item.category))].sort();
+
+                return `
+                    <div class="settings-card">
+                        <div class="settings-card-title">Category Management</div>
+                        <p style="color: var(--text-secondary); margin-bottom: 1.5rem; font-size: 0.9rem;">Rename test categories across the application. This change will update all tests under the specified category.</p>
+                        <div class="responsive-table-wrapper">
+                            <table class="table">
+                                <thead><tr><th>Category Name</th><th style="text-align: right;">Actions</th></tr></thead>
+                                <tbody>
+                                    ${allCategories.map(cat => {
+                                        if (appState.editingCategoryName === cat) {
+                                            return `
+                                                <tr class="animate-fade-in">
+                                                    <td><input type="text" id="edit-category-input-${cat}" class="form-input" value="${cat}" oninput="event.stopPropagation()"></td>
+                                                    <td style="text-align: right; white-space: nowrap; display: flex; gap: 0.5rem; justify-content: flex-end;">
+                                                        <button onclick="saveCategoryRename('${cat}', event)" class="btn-primary" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">✓ Save</button>
+                                                        <button onclick="appState.editingCategoryName = null; renderApp();" class="btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">✗ Cancel</button>
+                                                    </td>
+                                                </tr>
+                                            `;
+                                        }
+                                        return `
+                                            <tr>
+                                                <td><strong>${cat}</strong></td>
+                                                <td style="text-align: right;">
+                                                    <button onclick="appState.editingCategoryName = '${cat}'; renderApp();" class="btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">&#9998;&#65039; Rename</button>
+                                                </td>
+                                            </tr>
+                                        `;
+                                    }).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            };
             const isAdmin = appState.currentUser.role === 'Admin';
 
             const companyProfileSection = `
@@ -3372,6 +3832,8 @@ async function loadData() {
 
                     ${isAdmin ? companyProfileSection : ''}
 
+                    ${isAdmin ? categoryManagementSection() : ''}
+
                     <div class="settings-card">
                         <div class="settings-card-title">About & Data Management</div>
                         <p style="color: var(--text-secondary); margin-bottom: 0.5rem;"><strong>Application:</strong> Silhouette Diagnostic Consultants</p>
@@ -3442,6 +3904,43 @@ async function loadData() {
             `;
         }
 
+        function renderHistoryFilters() {
+            const filters = appState.historyFilters;
+            const uniqueUsers = [...new Set(auditLog.map(log => log.user))];
+            const uniqueActions = [...new Set(auditLog.map(log => log.action))];
+
+            return `
+                <div class="filter-section">
+                    <div class="filter-group">
+                        <label>Filter by User</label>
+                        <select class="form-select" onchange="updateHistoryFilter('user', this.value)">
+                            <option value="">All Users</option>
+                            ${uniqueUsers.map(user => `<option value="${user}" ${filters.user === user ? 'selected' : ''}>${user}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Filter by Action</label>
+                        <select class="form-select" onchange="updateHistoryFilter('action', this.value)">
+                            <option value="">All Actions</option>
+                            ${uniqueActions.map(action => `<option value="${action}" ${filters.action === action ? 'selected' : ''}>${action.replace(/_/g, ' ')}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Start Date</label>
+                        <input type="date" class="form-input" value="${filters.startDate}" onchange="updateHistoryFilter('startDate', this.value)">
+                    </div>
+                    <div class="filter-group">
+                        <label>End Date</label>
+                        <input type="date" class="form-input" value="${filters.endDate}" onchange="updateHistoryFilter('endDate', this.value)">
+                    </div>
+                    <div class="filter-group">
+                        <label>&nbsp;</label>
+                        <button onclick="clearHistoryFilters()" class="btn-secondary">Clear Filters</button>
+                    </div>
+                </div>
+            `;
+        }
+
 
 
         function renderHistory() {
@@ -3450,13 +3949,26 @@ async function loadData() {
             }
 
             const searchQuery = appState.historySearchQuery.toLowerCase();
+            const filters = appState.historyFilters;
             const filteredLog = auditLog.filter(log => {
                 if (!searchQuery) return true;
                 const userMatch = log.user.toLowerCase().includes(searchQuery);
                 const actionMatch = log.action.toLowerCase().replace('_', ' ').includes(searchQuery);
                 return userMatch || actionMatch;
+                const logDate = new Date(log.timestamp);
+                const startDate = filters.startDate ? new Date(filters.startDate) : null;
+                const endDate = filters.endDate ? new Date(filters.endDate) : null;
+
+                if (startDate) startDate.setHours(0, 0, 0, 0);
+                if (endDate) endDate.setHours(23, 59, 59, 999);
+
+                return (!filters.user || log.user === filters.user) &&
+                       (!filters.action || log.action === filters.action) &&
+                       (!startDate || logDate >= startDate) &&
+                       (!endDate || logDate <= endDate);
             });
 
+            
             function resetHistorySearch() {
                 appState.historySearchQuery = '';
                 renderApp();
@@ -3473,12 +3985,14 @@ async function loadData() {
                         </div>
 
                         <div class="filter-section" style="padding-bottom: 1.5rem; border-bottom: 1px solid var(--border);">
-                            <div class="filter-group" style="flex: 2;">
+                            <div class="filter-group" style="flex: 2; position: relative;">
                                 <label>Search by User or Action</label>
-                                <input type="text" id="historySearch" placeholder="e.g., John Doe or CREATE_BILLING" value="${appState.historySearchQuery}" oninput="appState.historySearchQuery = this.value; appState.analytics.historyPage = 0; renderApp();">
+                                <input type="text" id="historySearch" placeholder="e.g., John Doe or CREATE_BILLING" value="${appState.historySearchQuery}" oninput="appState.historySearchQuery = this.value; renderHistorySuggestions(this.value); appState.analytics.historyPage = 0;" autocomplete="off">
+                                <div id="historySuggestions" class="autocomplete-box"></div>
                             </div>
                             <button class="btn-secondary" onclick="appState.historySearchQuery = ''; renderApp();">Clear</button>
                         </div>
+                        ${renderHistoryFilters()}
                         <div class="responsive-table-wrapper">
                             <table class="table">
 
@@ -3506,7 +4020,7 @@ async function loadData() {
                                         }
 
                                         return paginatedItems.map(log => `
-                                            <tr>
+                                            <tr id="history-item-${log.id}">
                                                 <td style="white-space: nowrap; font-size: 0.85rem;">${log.timestamp instanceof Date ? log.timestamp.toLocaleString() : 'Invalid Date'}</td>
                                                 <td><strong>${log.user}</strong></td>
                                                 <td><span class="badge ${log.role === 'Admin' ? 'badge-error' : 'badge-primary'}">${log.role}</span></td>
@@ -3552,138 +4066,320 @@ async function loadData() {
         }
 
         function attachEventListeners() {
-            // Service selection checkboxes
-            document.querySelectorAll('.service-checkbox').forEach(checkbox => {
-                checkbox.addEventListener('change', function() {
-                    // if user toggles a classic checkbox, sync to appState.selectedServices
-                    const id = this.dataset.id;
-                    if (this.checked) addServiceById(id);
-                    else removeServiceById(id);
-                    updateBillingCalculations();
+            try {
+                // Service selection checkboxes
+                document.querySelectorAll('.service-checkbox').forEach(checkbox => {
+                    checkbox.addEventListener('change', function() {
+                        // if user toggles a classic checkbox, sync to appState.selectedServices
+                        const id = this.dataset.id;
+                        if (this.checked) addServiceById(id);
+                        else removeServiceById(id);
+                        updateBillingCalculations();
+                    });
                 });
-            });
 
-            // Discount input
-            document.getElementById('discount')?.addEventListener('input', updateBillingCalculations);
+                // Discount input
+                document.getElementById('discount')?.addEventListener('input', updateBillingCalculations);
 
-            // Service item click: toggle checkbox unless click target is an input (checkbox or override price)
-            document.querySelectorAll('.service-item').forEach(item => {
-                item.addEventListener('click', function(e) {
-                    const target = e.target;
-                    if (target && (target.closest('.override-price') || target.closest('.service-checkbox') || target.tagName === 'INPUT')) {
-                        // let the input handle the event
-                        return;
+                // Service item click: toggle checkbox unless click target is an input (checkbox or override price)
+                document.querySelectorAll('.service-item').forEach(item => {
+                    item.addEventListener('click', function(e) {
+                        const target = e.target;
+                        if (target && (target.closest('.override-price') || target.closest('.service-checkbox') || target.tagName === 'INPUT')) {
+                            // let the input handle the event
+                            return;
+                        }
+                        const checkbox = this.querySelector('.service-checkbox');
+                        if (checkbox) {
+                            checkbox.checked = !checkbox.checked;
+                            updateBillingCalculations();
+                        }
+                    });
+                });
+
+                // Override price inputs (shown in VIP mode)
+                document.querySelectorAll('.override-price').forEach(input => {
+                    input.addEventListener('input', function() {
+                        const id = this.dataset.id;
+                        const val = parseFloat(this.value);
+                        const svc = (appState.billingData && appState.billingData.selectedServices) && appState.billingData.selectedServices.find(x => String(x.id) === String(id));
+                        if (svc) {
+                            svc.overridePrice = !isNaN(val) && val >= 0 ? val : null;
+                        }
+                        updateBillingCalculations();
+                    });
+                });
+
+                // PR agent search input
+                const referredByInput = document.getElementById('referredBySearch');
+                if (referredByInput) {
+                    referredByInput.oninput = function() {
+                        renderPRSuggestions(this.value);
+                    };
+                    referredByInput.addEventListener('focus', function() {
+                        // Show suggestions on focus
+                        renderPRSuggestions(this.value);
+                    });
+                    referredByInput.addEventListener('blur', function() {
+                        // Hide suggestions after a short delay (to allow click)
+                        setTimeout(() => {
+                            const prDiv = document.getElementById('prSuggestions');
+                            if (prDiv) prDiv.style.display = 'none';
+                        }, 200);
+                    });
+                }
+
+                // PR suggestions click handler (delegated)
+                const prSuggestionsDiv = document.getElementById('prSuggestions');
+                if (prSuggestionsDiv) {
+                    prSuggestionsDiv.addEventListener('click', function(e) {
+                        const item = e.target.closest('.pr-suggestion-item');
+                        if (!item) return;
+                        const name = item.dataset.name;
+                        const phone = item.dataset.phone;
+                        selectPRAgent(name, phone);
+                    });
+                }
+
+                // Add new PR agent button
+                const addPRBtn = document.getElementById('addNewPRBtn');
+                if (addPRBtn) {
+                    addPRBtn.addEventListener('click', addNewPRAgent);
+                }
+
+                // Inventory search input
+                const inventorySearchInput = document.getElementById('inventorySearch');
+                if (inventorySearchInput) {
+                    // Use a small debounce to avoid heavy work while user is typing, for a smooth experience
+                    inventorySearchInput.addEventListener('input', function() {
+                        // keep app state in sync immediately
+                        appState.inventorySearchQuery = this.value;
+
+                        // debounced suggestion render
+                        clearTimeout(inventorySuggestTimeout);
+                        inventorySuggestTimeout = setTimeout(() => {
+                            renderInventorySuggestions(this.value);
+                        }, 120); // 120ms debounce
+                    });
+
+                    inventorySearchInput.addEventListener('focus', function() {
+                        // show suggestions immediately on focus for current value
+                        renderInventorySuggestions(this.value);
+                    });
+
+                    inventorySearchInput.addEventListener('keydown', function(e) {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            const first = document.querySelector('#inventorySuggestions .autocomplete-item');
+                            if (first) first.click();
+                        }
+                        // Arrow navigation (basic)
+                        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                            const items = Array.from(document.querySelectorAll('#inventorySuggestions .autocomplete-item'));
+                            if (items.length === 0) return;
+                            e.preventDefault();
+                            // find current focused index
+                            const active = document.activeElement;
+                            const activeItem = active && active.classList && active.classList.contains('autocomplete-item') ? active : null;
+                            let currentIndex = activeItem ? items.indexOf(activeItem) : -1;
+                            if (e.key === 'ArrowDown') currentIndex = Math.min(items.length - 1, currentIndex + 1);
+                            if (e.key === 'ArrowUp') currentIndex = Math.max(0, currentIndex - 1);
+                            const toFocus = items[currentIndex];
+                            if (toFocus) toFocus.focus();
+                        }
+                    });
+
+                    inventorySearchInput.addEventListener('blur', function() {
+                        setTimeout(() => {
+                            const suggestionsDiv = document.getElementById('inventorySuggestions');
+                            if (suggestionsDiv) suggestionsDiv.style.display = 'none';
+                        }, 200);
+                    });
+                }
+
+                // Inventory suggestions click handler (delegated)
+                const invSug = document.getElementById('inventorySuggestions');
+                if (invSug) {
+                    invSug.onclick = function(e) {
+                        const item = e.target.closest('.autocomplete-item');
+                        if (!item) return;
+                        const id = item.dataset.id;
+                        const name = item.dataset.name || item.textContent.trim();
+                        if (!id) return;
+                        selectInventoryItemById(id, name);
+                    };
+                }
+
+                // PR Management: attach handlers for search suggestions (replace handlers each render)
+                const prMgmtInput = document.getElementById('prSearch');
+                const prSugDiv = document.getElementById('prManagementSuggestions');
+                if (prMgmtInput) {
+                    prMgmtInput.onkeydown = function(e) {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            const first = document.querySelector('#prManagementSuggestions .autocomplete-item');
+                            if (first) first.click();
+                        }
+                    };
+                    prMgmtInput.onfocus = function() { renderPRManagementSuggestions(this.value); };
+                    prMgmtInput.onblur = function() { setTimeout(() => { if (prSugDiv) prSugDiv.style.display = 'none'; }, 200); };
+                }
+                if (prSugDiv) {
+                    prSugDiv.onclick = function(e) {
+                        const item = e.target.closest('.autocomplete-item');
+                        if (!item) return;
+                        const id = item.dataset.id;
+                        const name = item.dataset.name || item.textContent.trim();
+                        if (!id) return;
+                        selectPRManagementById(id, name);
+                    };
+                }
+
+                // Records search input handlers (replace per-render to avoid duplicates)
+                const recInput = document.getElementById('searchQuery');
+                const recSugDiv = document.getElementById('recordsSuggestions');
+                if (recInput) {
+                    recInput.onkeydown = function(e) {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            const first = document.querySelector('#recordsSuggestions .autocomplete-item');
+                            if (first) first.click();
+                        }
+                        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                            const items = Array.from(document.querySelectorAll('#recordsSuggestions .autocomplete-item'));
+                            if (items.length === 0) return;
+                            e.preventDefault();
+                            const active = document.activeElement;
+                            const activeItem = active && active.classList && active.classList.contains('autocomplete-item') ? active : null;
+                            let currentIndex = activeItem ? items.indexOf(activeItem) : -1;
+                            if (e.key === 'ArrowDown') currentIndex = Math.min(items.length - 1, currentIndex + 1);
+                            if (e.key === 'ArrowUp') currentIndex = Math.max(0, currentIndex - 1);
+                            const toFocus = items[currentIndex];
+                            if (toFocus) toFocus.focus();
+                        }
+                    };
+                    recInput.onfocus = function() { renderRecordsSuggestions(this.value); };
+                    recInput.onblur = function() { setTimeout(() => { if (recSugDiv) recSugDiv.style.display = 'none'; }, 200); };
+                    // Keep app state in sync but do not renderApp on each keystroke
+                    recInput.oninput = function() { appState.recordFilters.searchQuery = this.value; renderRecordsSuggestions(this.value); };
+                }
+                if (recSugDiv) {
+                    recSugDiv.onclick = function(e) {
+                        const item = e.target.closest('.autocomplete-item');
+                        if (!item) return;
+                        const id = item.dataset.id;
+                        const pid = item.dataset.pid || item.textContent.trim();
+                        if (!id) return;
+                        selectRecordById(id, pid);
+                    };
+                }
+
+                // History search input handlers (replace per-render to avoid duplicates)
+                const histInput = document.getElementById('historySearch');
+                const histSugDiv = document.getElementById('historySuggestions');
+                if (histInput) {
+                    histInput.onkeydown = function(e) {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            const first = document.querySelector('#historySuggestions .autocomplete-item');
+                            if (first) first.click();
+                        }
+                        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                            const items = Array.from(document.querySelectorAll('#historySuggestions .autocomplete-item'));
+                            if (items.length === 0) return;
+                            e.preventDefault();
+                            const active = document.activeElement;
+                            const activeItem = active && active.classList && active.classList.contains('autocomplete-item') ? active : null;
+                            let currentIndex = activeItem ? items.indexOf(activeItem) : -1;
+                            if (e.key === 'ArrowDown') currentIndex = Math.min(items.length - 1, currentIndex + 1);
+                            if (e.key === 'ArrowUp') currentIndex = Math.max(0, currentIndex - 1);
+                            const toFocus = items[currentIndex];
+                            if (toFocus) toFocus.focus();
+                        }
+                    };
+                    histInput.onfocus = function() { renderHistorySuggestions(this.value); };
+                    histInput.onblur = function() { setTimeout(() => { if (histSugDiv) histSugDiv.style.display = 'none'; }, 200); };
+                    // Keep app state in sync but do not renderApp on each keystroke
+                    histInput.oninput = function() { appState.historySearchQuery = this.value; renderHistorySuggestions(this.value); };
+                }
+                if (histSugDiv) {
+                    histSugDiv.onclick = function(e) {
+                        const item = e.target.closest('.autocomplete-item');
+                        if (!item) return;
+                        const id = item.dataset.id;
+                        const label = item.dataset.label || item.textContent.trim();
+                        if (!id) return;
+                        selectHistoryById(id, label);
+                    };
+                }
+
+                // Hide inventory suggestions when clicking outside
+                document.addEventListener('click', function(e) {
+                    const invBox = document.getElementById('inventorySuggestions');
+                    const invInput = document.getElementById('inventorySearch');
+                    if (!invBox || !invInput) return;
+                    if (!invBox.contains(e.target) && !invInput.contains(e.target)) {
+                        invBox.style.display = 'none';
                     }
-                    const checkbox = this.querySelector('.service-checkbox');
-                    if (checkbox) {
-                        checkbox.checked = !checkbox.checked;
+                });
+
+                // Service search input
+                const searchInput = document.getElementById('serviceSearch');
+                if (searchInput) {
+                    searchInput.addEventListener('input', function() {
+                        renderServiceSuggestions(this.value);
+                    });
+                    searchInput.addEventListener('keydown', function(e) {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            // If there's a first suggestion, pick it
+                            const first = document.querySelector('#serviceSuggestions .suggestion-item');
+                            if (first) first.click();
+                        }
+                    });
+                }
+
+                // Suggestion click handler (delegated)
+                document.getElementById('serviceSuggestions')?.addEventListener('click', function(e) {
+                    const btn = e.target.closest('.suggestion-item');
+                    if (!btn) return;
+                    const id = btn.dataset.id;
+                    if (id) addServiceById(id);
+                    else {
+                        // category click: expand category list
+                        const cat = btn.dataset.category;
+                        renderServiceSuggestions(cat, {expandCategory: true});
+                    }
+                });
+
+                // Selected services remove (delegated)
+                document.getElementById('selectedServicesList')?.addEventListener('click', function(e) {
+                    const rem = e.target.closest('.remove-selected');
+                    if (!rem) return;
+                    const id = rem.dataset.id;
+                    removeServiceById(id);
+                    renderApp();
+                });
+
+                // VIP override input change (delegated)
+                document.getElementById('selectedServicesList')?.addEventListener('change', function(e) {
+                    const inp = e.target.closest('.vip-override-input');
+                    if (!inp) return;
+                    const id = inp.dataset.id;
+                    const newPrice = inp.value ? parseFloat(inp.value) : null;
+                    const services = appState.billingData.selectedServices || [];
+                    const service = services.find(s => String(s.id) === String(id));
+                    if (service) {
+                        service.overridePrice = (newPrice != null && !isNaN(newPrice)) ? newPrice : null;
                         updateBillingCalculations();
                     }
                 });
-            });
 
-            // Override price inputs (shown in VIP mode)
-            document.querySelectorAll('.override-price').forEach(input => {
-                input.addEventListener('input', function() {
-                    const id = this.dataset.id;
-                    const val = parseFloat(this.value);
-                    const svc = appState.billingData.selectedServices && appState.billingData.selectedServices.find(x => String(x.id) === String(id));
-                    if (svc) {
-                        svc.overridePrice = !isNaN(val) && val >= 0 ? val : null;
-                    }
-                    updateBillingCalculations();
-                });
-            });
-
-            // PR agent search input
-            const prSearchInput = document.getElementById('referredBySearch');
-            if (prSearchInput) {
-                prSearchInput.oninput = function() {
-                    renderPRSuggestions(this.value);
-                };
-                prSearchInput.addEventListener('focus', function() {
-                    // Show suggestions on focus
-                    renderPRSuggestions(this.value);
-                });
-                prSearchInput.addEventListener('blur', function() {
-                    // Hide suggestions after a short delay (to allow click)
-                    setTimeout(() => {
-                        document.getElementById('prSuggestions').style.display = 'none';
-                    }, 200);
-                });
+                // Call updateBillingCalculations to populate the preview panel on initial render
+                updateBillingCalculations();
+            } catch (e) {
+                console.error('attachEventListeners failed:', e);
             }
-
-            // PR suggestions click handler (delegated)
-            const prSuggestionsDiv = document.getElementById('prSuggestions');
-            if (prSuggestionsDiv) {
-                prSuggestionsDiv.addEventListener('click', function(e) {
-                    const item = e.target.closest('.pr-suggestion-item');
-                    if (!item) return;
-                    const name = item.dataset.name;
-                    const phone = item.dataset.phone;
-                    selectPRAgent(name, phone);
-                });
-            }
-
-            // Add new PR agent button
-            const addPRBtn = document.getElementById('addNewPRBtn');
-            if (addPRBtn) {
-                addPRBtn.addEventListener('click', addNewPRAgent);
-            }
-
-            // Service search input
-            const searchInput = document.getElementById('serviceSearch');
-            if (searchInput) {
-                searchInput.addEventListener('input', function() {
-                    renderServiceSuggestions(this.value);
-                });
-                searchInput.addEventListener('keydown', function(e) {
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        // If there's a first suggestion, pick it
-                        const first = document.querySelector('#serviceSuggestions .suggestion-item');
-                        if (first) first.click();
-                    }
-                });
-            }
-
-            // Suggestion click handler (delegated)
-            document.getElementById('serviceSuggestions')?.addEventListener('click', function(e) {
-                const btn = e.target.closest('.suggestion-item');
-                if (!btn) return;
-                const id = btn.dataset.id;
-                if (id) addServiceById(id);
-                else {
-                    // category click: expand category list
-                    const cat = btn.dataset.category;
-                    renderServiceSuggestions(cat, {expandCategory: true});
-                }
-            });
-
-            // Selected services remove (delegated)
-            document.getElementById('selectedServicesList')?.addEventListener('click', function(e) {
-                const rem = e.target.closest('.remove-selected');
-                if (!rem) return;
-                const id = rem.dataset.id;
-                removeServiceById(id);
-                renderApp();
-            });
-
-            // VIP override input change (delegated)
-            document.getElementById('selectedServicesList')?.addEventListener('change', function(e) {
-                const inp = e.target.closest('.vip-override-input');
-                if (!inp) return;
-                const id = inp.dataset.id;
-                const newPrice = inp.value ? parseFloat(inp.value) : null;
-                const service = appState.billingData.selectedServices.find(s => String(s.id) === String(id));
-                if (service) {
-                    service.overridePrice = (newPrice != null && !isNaN(newPrice)) ? newPrice : null;
-                    updateBillingCalculations();
-                }
-            });
-
-            // Call updateBillingCalculations to populate the preview panel on initial render
-            updateBillingCalculations();
         }
 
         // --- Helper functions for PR agent search/add ---
@@ -3728,6 +4424,214 @@ async function loadData() {
             document.getElementById('addPRAgentContainer').style.display = 'none';
         }
 
+        // PR Management suggestions (non-billing page)
+        let prMgmtSuggestTimeout = null;
+        function renderPRManagementSuggestions(query) {
+            const suggestionsDiv = document.getElementById('prManagementSuggestions');
+            if (!suggestionsDiv) return;
+
+            clearTimeout(prMgmtSuggestTimeout);
+            prMgmtSuggestTimeout = setTimeout(() => {
+                const q = (query || '').toLowerCase().trim();
+                if (!q) { suggestionsDiv.style.display = 'none'; return; }
+
+                const matches = prList.filter(pr => pr.name.toLowerCase().includes(q) || (pr.phone || '').toLowerCase().includes(q)).slice(0, 8);
+                if (matches.length === 0) {
+                    suggestionsDiv.innerHTML = `<div class="autocomplete-item" style="color:var(--text-secondary);">No results for "${query}"</div>`;
+                    suggestionsDiv.style.display = 'block';
+                    return;
+                }
+
+                suggestionsDiv.innerHTML = matches.map(m => `
+                    <div class="autocomplete-item" tabindex="0" data-id="${m.id}" data-name="${m.name}">
+                        <div style="font-weight:500;">${m.name}</div>
+                        <div style="font-size:0.85rem; color:var(--text-secondary);">${m.phone || 'N/A'}</div>
+                    </div>
+                `).join('');
+                suggestionsDiv.style.display = 'block';
+            }, 120);
+        }
+
+        function selectPRManagementById(id, name) {
+            const input = document.getElementById('prSearch');
+            const suggestionsDiv = document.getElementById('prManagementSuggestions');
+            if (input) input.value = name;
+            appState.recordFilters.prManagementSearchQuery = name;
+            if (suggestionsDiv) suggestionsDiv.style.display = 'none';
+            renderApp();
+
+            // Scroll to the PR row after render
+            setTimeout(() => {
+                const row = document.getElementById('pr-item-' + id);
+                if (row) {
+                    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    const prevBg = row.style.background;
+                    row.style.background = 'rgba(255, 235, 59, 0.15)';
+                    setTimeout(() => { row.style.background = prevBg; }, 2000);
+                }
+            }, 120);
+        }
+
+        // Inventory search suggestions (used on Inventory page)
+        function renderInventorySuggestions(query) {
+            const suggestionsDiv = document.getElementById('inventorySuggestions');
+            if (!suggestionsDiv) return;
+
+            const q = (query || '').toLowerCase().trim();
+            if (!q) {
+                suggestionsDiv.style.display = 'none';
+                return;
+            }
+
+            const matches = inventory.filter(it => it.name.toLowerCase().includes(q)).slice(0, 8);
+            if (matches.length === 0) {
+                suggestionsDiv.innerHTML = `<div style="padding:0.5rem; color:var(--text-secondary); font-size:0.9rem;">No results for "${query}"</div>`;
+                suggestionsDiv.style.display = 'block';
+                return;
+            }
+
+            suggestionsDiv.innerHTML = matches.map(it => `
+                <div class="autocomplete-item" tabindex="0" data-id="${it.id}" data-name="${it.name}">${it.name}</div>
+            `).join('');
+            suggestionsDiv.style.display = 'block';
+        }
+
+        function selectInventoryItemById(id, name) {
+            // Set search and re-render
+            const input = document.getElementById('inventorySearch');
+            const suggestionsDiv = document.getElementById('inventorySuggestions');
+            if (input) input.value = name;
+            appState.inventorySearchQuery = name;
+            if (suggestionsDiv) suggestionsDiv.style.display = 'none';
+            renderApp();
+
+            // Scroll to the item after render
+            setTimeout(() => {
+                const row = document.getElementById('inventory-item-' + id);
+                if (row) {
+                    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    const prevBg = row.style.background;
+                    row.style.background = 'rgba(255, 235, 59, 0.15)';
+                    setTimeout(() => { row.style.background = prevBg; }, 2000);
+                }
+            }, 120);
+        }
+
+        // Records search suggestions (Patient Records page)
+        function renderRecordsSuggestions(query) {
+            const suggestionsDiv = document.getElementById('recordsSuggestions');
+            if (!suggestionsDiv) return;
+
+            clearTimeout(recordsSuggestTimeout);
+            recordsSuggestTimeout = setTimeout(() => {
+                const q = (query || '').toLowerCase().trim();
+                if (!q) { suggestionsDiv.style.display = 'none'; return; }
+
+                const matches = orders.filter(o => (o.patientName || '').toLowerCase().includes(q) || (o.pid || '').toLowerCase().includes(q))
+                    .sort((a, b) => new Date(b.date) - new Date(a.date))
+                    .slice(0, 8);
+
+                if (matches.length === 0) {
+                    suggestionsDiv.innerHTML = `<div class="autocomplete-item" style="color:var(--text-secondary);">No results for "${query}"</div>`;
+                    suggestionsDiv.style.display = 'block';
+                    return;
+                }
+
+                suggestionsDiv.innerHTML = matches.map(m => `
+                    <div class="autocomplete-item" tabindex="0" data-id="${m.id}" data-pid="${m.pid}">
+                        <div style="font-weight:500;">${m.patientName}</div>
+                        <div style="font-size:0.85rem; color:var(--text-secondary);">${m.pid} • ${new Date(m.date).toISOString().split('T')[0]}</div>
+                    </div>
+                `).join('');
+                suggestionsDiv.style.display = 'block';
+            }, 120);
+        }
+
+        // History search suggestions
+        function renderHistorySuggestions(query) {
+            const suggestionsDiv = document.getElementById('historySuggestions');
+            if (!suggestionsDiv) return;
+
+            clearTimeout(historySuggestTimeout);
+            historySuggestTimeout = setTimeout(() => {
+                const q = (query || '').toLowerCase().trim();
+                if (!q) { suggestionsDiv.style.display = 'none'; return; }
+
+                const matches = auditLog.filter(l => (l.user || '').toLowerCase().includes(q) || (l.action || '').toLowerCase().replace('_',' ').includes(q))
+                    .slice(0, 8);
+
+                if (matches.length === 0) {
+                    suggestionsDiv.innerHTML = `<div class="autocomplete-item" style="color:var(--text-secondary);">No results for "${query}"</div>`;
+                    suggestionsDiv.style.display = 'block';
+                    return;
+                }
+
+                suggestionsDiv.innerHTML = matches.map(m => `
+                    <div class="autocomplete-item" tabindex="0" data-id="${m.id}" data-label="${(m.user || '') + ' — ' + (m.action || '').replace('_',' ')}">
+                        <div style="font-weight:500;">${m.user}</div>
+                        <div style="font-size:0.85rem; color:var(--text-secondary);">${(m.action || '').replace('_',' ')} • ${new Date(m.timestamp).toISOString().split('T')[0]}</div>
+                    </div>
+                `).join('');
+                suggestionsDiv.style.display = 'block';
+                // make items clickable and keyboard accessible for arrow navigation
+                suggestionsDiv.querySelectorAll('.autocomplete-item').forEach(it => {
+                    it.onclick = function() { selectHistoryById(this.dataset.id, this.dataset.label || this.textContent.trim()); };
+                    it.onkeydown = function(e) { if (e.key === 'Enter') this.click(); };
+                    it.onfocus = function() { /* focus visual handled via CSS */ };
+                });
+            }, 120);
+        }
+
+        function selectHistoryById(id, label) {
+            const input = document.getElementById('historySearch');
+            const suggestionsDiv = document.getElementById('historySuggestions');
+            if (input) input.value = label;
+            appState.historySearchQuery = label;
+
+            // Set page to where the history entry lives
+            const idx = auditLog.findIndex(a => String(a.id) === String(id));
+            if (idx >= 0) appState.analytics.historyPage = Math.floor(idx / 10);
+
+            if (suggestionsDiv) suggestionsDiv.style.display = 'none';
+            renderApp();
+
+            // Scroll to the history row after render
+            setTimeout(() => {
+                const row = document.getElementById('history-item-' + id);
+                if (row) {
+                    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    const prevBg = row.style.background;
+                    row.style.background = 'rgba(255, 235, 59, 0.15)';
+                    setTimeout(() => { row.style.background = prevBg; }, 2000);
+                }
+            }, 120);
+        }
+
+        function selectRecordById(id, pidOrName) {
+            const input = document.getElementById('searchQuery');
+            const suggestionsDiv = document.getElementById('recordsSuggestions');
+            if (input) input.value = pidOrName;
+            appState.recordFilters.searchQuery = pidOrName;
+
+            // Set page to where the record lives
+            const idx = orders.findIndex(o => String(o.id) === String(id));
+            if (idx >= 0) appState.analytics.historyPage = Math.floor(idx / 10);
+
+            if (suggestionsDiv) suggestionsDiv.style.display = 'none';
+            renderApp();
+
+            // Scroll to the record row after render
+            setTimeout(() => {
+                const row = document.getElementById('record-item-' + id);
+                if (row) {
+                    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    const prevBg = row.style.background;
+                    row.style.background = 'rgba(255, 235, 59, 0.15)';
+                    setTimeout(() => { row.style.background = prevBg; }, 2000);
+                }
+            }, 120);
+        }
+
         function addNewPRAgent() {
             const query = document.getElementById('referredBySearch').value.trim();
             if (!query) {
@@ -3745,27 +4649,6 @@ async function loadData() {
             document.getElementById('prSuggestions').style.display = 'none';
             document.getElementById('addPRAgentContainer').style.display = 'none';
             logAction('ADD_PR_AGENT', `New PR agent added: ${query} (${finalPhone})`);
-        }
-
-        function handleLogin() {
-            const username = document.getElementById('loginUsername').value.trim();
-            const password = document.getElementById('loginPassword').value;
-
-            if (!username || !password) {
-                alert('Please enter both username and password');
-                return;
-            }
-
-            // Check if user exists in the users array
-            const user = users.find(u => u.username === username);
-            if (user && user.password === password) {
-                appState.currentUser = { username, role: user.role, fullName: user.fullName };
-                logAction('LOGIN', `User '${user.fullName}' logged in.`);
-                appState.currentView = 'dashboard';
-                renderApp();
-            } else {
-                alert('Invalid username or password. If no users exist, please set up the first admin user.');
-            }
         }
 
         function handleFirstTimeSetup() {
@@ -3815,6 +4698,12 @@ async function loadData() {
         }
 
         function navigateTo(view) {
+            // If user is leaving billing and there's unsaved billing data, show confirm modal
+            if (appState.currentView === 'billing' && view !== 'billing' && hasUnsavedBilling()) {
+                showNavigateAwayModal(view);
+                return;
+            }
+
             appState.currentView = view;
             appState.billingStep = 1;
             appState.editingPRId = null; // Cancel any edits when navigating away
@@ -3925,6 +4814,10 @@ async function loadData() {
             renderApp();
         }
 
+        function finalizeBilling() {
+            billingStep(3);
+        }
+
         // Toggle VIP form mode: allows manual override of service prices
         function toggleVIPMode() {
             appState.vipMode = !appState.vipMode;
@@ -3948,21 +4841,50 @@ async function loadData() {
                 <div class="card animate-fade-in" style="margin-top: 1rem; background-color: var(--background);">
                     <h4 style="font-weight: 600; margin-bottom: 1rem;">Enter Split Amounts</h4>
                     <div class="grid-3">
-                        <div class="form-group"><label class="form-label">Cash</label><input type="number" class="form-input" value="${appState.billingData.splitPayments.cash}" oninput="updateSplitPayment('cash', this.value)"></div>
-                        <div class="form-group"><label class="form-label">POS</label><input type="number" class="form-input" value="${appState.billingData.splitPayments.pos}" oninput="updateSplitPayment('pos', this.value)"></div>
-                        <div class="form-group"><label class="form-label">Transfer</label><input type="number" class="form-input" value="${appState.billingData.splitPayments.transfer}" oninput="updateSplitPayment('transfer', this.value)"></div>
+                        <div class="form-group"><label class="form-label">Cash</label><input type="number" class="form-input" data-split-method="cash" value="${appState.billingData.splitPayments.cash}" oninput="updateSplitPayment('cash', this.value)" onblur="commitSplitPayment()"></div>
+                        <div class="form-group"><label class="form-label">POS</label><input type="number" class="form-input" data-split-method="pos" value="${appState.billingData.splitPayments.pos}" oninput="updateSplitPayment('pos', this.value)" onblur="commitSplitPayment()"></div>
+                        <div class="form-group"><label class="form-label">Transfer</label><input type="number" class="form-input" data-split-method="transfer" value="${appState.billingData.splitPayments.transfer}" oninput="updateSplitPayment('transfer', this.value)" onblur="commitSplitPayment()"></div>
                     </div>
                 </div>
             `;
         }
 
         function updateSplitPayment(method, value) {
+            // Update state immediately but avoid re-rendering the whole app on every keystroke
             appState.billingData.splitPayments[method] = parseFloat(value) || 0;
+
             const totalPaid = Object.values(appState.billingData.splitPayments).reduce((sum, val) => sum + (val || 0), 0);
             appState.billingData.amountPaid = totalPaid;
             if (appState.billingData.paymentStatus === 'installment') {
                 appState.billingData.balance = Math.max(0, appState.billingData.total - totalPaid);
             }
+
+            // Update important UI elements directly for immediate feedback
+            const receiptAmount = document.getElementById('receiptAmountPaid');
+            if (receiptAmount) receiptAmount.textContent = formatCurrency(appState.billingData.amountPaid);
+            const receiptBalance = document.getElementById('receiptBalance');
+            if (receiptBalance) receiptBalance.textContent = formatCurrency(appState.billingData.balance);
+
+            // Debounced render to commit changes and avoid bubbling/flicker while typing
+            clearTimeout(splitPaymentTimeout);
+            // If the user is actively focused on one of the split inputs, avoid scheduling a render
+            const active = document.activeElement;
+            const focusedIsSplit = active && active.getAttribute && active.getAttribute('data-split-method');
+            if (!focusedIsSplit) {
+                splitPaymentTimeout = setTimeout(() => {
+                    renderApp();
+                    splitPaymentTimeout = null;
+                }, 180); // 180ms debounce for typing
+            } else {
+                // keep splitPaymentTimeout null while typing — render will occur on blur via commitSplitPayment
+                splitPaymentTimeout = null;
+            }
+        }
+
+        function commitSplitPayment() {
+            // User left the input — commit any pending changes immediately
+            clearTimeout(splitPaymentTimeout);
+            splitPaymentTimeout = null;
             renderApp();
         }
 
@@ -3990,25 +4912,35 @@ async function loadData() {
             const receiptHTML = `
                 <html>
                 <head>
-                    <title>Receipt - ${order.pid}</title>
+                    <title>Official Receipt - ${order.pid}</title>
                     <style>
-                        body { font-family: 'Segoe UI', sans-serif; margin: 0; color: #333; }
-                        .receipt-container { width: 320px; margin: 0 auto; padding: 20px; background-color: #fff; }
-                        .receipt-header { text-align: center; border-bottom: 1px dashed #999; padding-bottom: 10px; margin-bottom: 15px; }
-                        .receipt-header .logo { font-size: 2.5rem; margin-bottom: 5px; }
-                        .receipt-header h2 { margin: 0; font-size: 1.4rem; color: #0e4a7c; }
-                        .receipt-header .address { font-size: 0.8rem; color: #555; margin-top: 5px; line-height: 1.4; }
-                        .receipt-header .receipt-title { margin: 5px 0 0 0; color: #555; }
-                        .details div, .services div, .total div { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 0.9rem; }
-                        .services { border-top: 1px dashed #999; border-bottom: 1px dashed #999; padding: 10px 0; margin: 15px 0; }
-                        .total .grand-total { font-weight: bold; font-size: 1.1rem; border-top: 1px solid #333; padding-top: 10px; margin-top: 5px; }
-                        .footer { text-align: center; margin-top: 20px; font-size: 0.8rem; color: #777; }
+                        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
+                        body { font-family: 'Roboto', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; margin: 0; color: #1e293b; background-color: #f8fafc; font-weight: bold; }
+                        .receipt-container { width: 380px; margin: 0 auto; padding: 25px; background-color: #ffffff; min-height: 90vh; }
+                        .receipt-header { text-align: center; border-bottom: 2px solid #334155; padding-bottom: 15px; margin-bottom: 20px; }
+                        .receipt-header .logo { margin-bottom: 10px; }
+                        .receipt-header h2 { margin: 0; font-size: 1.8rem; font-weight: 700; color: #0e4a7c; }
+                        .receipt-header .address { font-size: 0.9rem; color: #475569; margin-top: 8px; line-height: 1.5; }
+                        .receipt-header .receipt-title { margin: 10px 0 0 0; font-size: 1rem; color: #475569; font-weight: bold; }
+                        .details { margin-bottom: 20px; }
+                        .details div { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 1rem; }
+                        .details div span:first-child { color: #475569; }
+                        .services { border-top: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; padding: 15px 0; margin: 20px 0; }
+                        .services .service-item { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; font-size: 1rem; }
+                        .services .service-item .service-name { font-weight: 500; }
+                        .services .service-item .service-category { font-size: 0.85rem; color: #64748b; }
+                        .services .service-item .service-price { font-weight: 700; }
+                        .total div { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 1rem; }
+                        .total .grand-total { font-weight: 700; font-size: 1.5rem; border-top: 2px solid #1e293b; padding-top: 15px; margin-top: 10px; }
+                        .total .balance-due { color: #ef4444; font-weight: 700; font-size: 1.3rem; }
+                        .footer { text-align: center; margin-top: 25px; font-size: 0.9rem; color: #64748b; }
+                        .footer p { margin: 5px 0; }
                     </style>
                 </head>
                 <body>
                     <div class="receipt-container">
                         <div class="receipt-header">
-                            <div class="logo"><img src="${appState.companyProfile.logo}" alt="Company Logo" style="height: 50px; width: auto; margin: 0 auto;"/></div>
+                            <div class="logo"><img src="${appState.companyProfile.logo}" alt="Company Logo" style="height: 80px; width: auto; margin: 0 auto;"/></div>
                             <h2>${appState.companyProfile.name}</h2>
                             <div class="address">
                                 <p>${appState.companyProfile.address}</p>
@@ -4017,46 +4949,47 @@ async function loadData() {
                             <p class="receipt-title">Official Receipt</p>
                         </div>
                         <div class="details">
-                            <div><span>Patient:</span> <strong>${order.patientName}</strong></div>
-                            <div><span>PID:</span> <strong>${order.pid}</strong></div>
-                            <div><span>Date:</span> <span>${new Date(order.date).toLocaleDateString()} ${order.time}</span></div>
+                            <div><span>Patient Name:</span> <strong>${order.patientName}</strong></div>
+                            <div><span>Patient ID:</span> <strong>${order.pid}</strong></div>
+                            <div><span>Date & Time:</span> <span>${new Date(order.date).toLocaleDateString()} ${order.time}</span></div>
                         </div>
                         <div class="services">
                             ${serviceDetails.map(s => `
-                                <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px;">
+                                <div class="service-item">
                                     <div>
-                                        <div>${s.name}</div>
-                                        ${s.category ? `<div style="font-size:0.8rem; color:#666;">${s.category}</div>` : ''}
+                                        <div class="service-name">${s.name}</div>
+                                        ${s.category ? `<div class="service-category">${s.category}</div>` : ''}
                                     </div>
-                                    <div>${formatCurrency(s.price)}</div>
+                                    <div class="service-price">${formatCurrency(s.price)}</div>
                                 </div>
                             `).join('')}
                         </div>
                         <div class="total">
                             <div><span>Subtotal:</span> <span>${formatCurrency(subtotal)}</span></div>
-                            <div><span>Discount:</span> <span>-${formatCurrency(subtotal - order.total)}</span></div>
+                            <div><span>Discount Given:</span> <span>-${formatCurrency(subtotal - order.total)}</span></div>
                             ${order.paymentMethod === 'split' && order.splitPayments ? `
                                 <div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed #999;">
                                     <div><span>Payment Method:</span> <span>Split Payment</span></div>
-                                    <div style="padding-left: 15px; font-size: 0.8rem; color: #555; margin-top: 5px;">
+                                    <div style="padding-left: 15px; font-size: 0.9rem; color: #475569; margin-top: 5px;">
                                         ${order.splitPayments.cash > 0 ? `<div><span>Cash:</span> <span>${formatCurrency(order.splitPayments.cash)}</span></div>` : ''}
                                         ${order.splitPayments.pos > 0 ? `<div><span>POS:</span> <span>${formatCurrency(order.splitPayments.pos)}</span></div>` : ''}
                                         ${order.splitPayments.transfer > 0 ? `<div><span>Transfer:</span> <span>${formatCurrency(order.splitPayments.transfer)}</span></div>` : ''}
                                     </div>
                                 </div>
                             ` : `
-                                <div><span>Payment Method:</span> <span>${order.paymentMethod}</span></div>
+                                <div><span>Payment Method:</span> <span>${order.paymentMethod.charAt(0).toUpperCase() + order.paymentMethod.slice(1)}</span></div>
                             `}
-                            <div class="grand-total"><span>Total Due:</span> <span>${formatCurrency(order.total)}</span></div>
+                            <div class="grand-total"><span>TOTAL:</span> <span>${formatCurrency(order.total)}</span></div>
                             ${order.paymentStatus === 'installment' ? `
                                 <div><span>Amount Paid:</span> <span>${formatCurrency(order.amountPaid)}</span></div>
-                                <div class="grand-total" style="color: #ef4444;"><span>Balance Due:</span> <span>${formatCurrency(order.balance)}</span></div>
+                                <div class="balance-due"><span>BALANCE DUE:</span> <span>${formatCurrency(order.balance)}</span></div>
                             ` : `
                                 <div class="grand-total"><span>Amount Paid:</span> <span>${formatCurrency(order.total)}</span></div>
                             `}
+                        <div class="footer">
+                            <p><strong>Payment Status: ${order.paymentStatus === 'full' ? 'PAID IN FULL' : 'INSTALLMENT'}</strong></p>
+                            <p>Thank you for choosing Silhouette Diagnostics.</p>
                         </div>
-                        <div class="footer"><p>Payment Status: ${order.paymentStatus === 'full' ? 'PAID IN FULL' : 'INSTALLMENT'}</p></div>
-                        <div class="footer"><p>Thank you for choosing Silhouette Diagnostics.</p></div>
                     </div>
                 </body></html>`;
 
@@ -4108,32 +5041,148 @@ async function loadData() {
 
             // If expandCategory option provided and query matches a category, show that category items
             if (opts.expandCategory && q) {
-                const cat = Object.keys(inventory.reduce((acc, s) => (acc[s.category] = true, acc), {})).find(c => c.toLowerCase().includes(q));
-                if (cat) {
-                    const list = inventory.filter(i => i.category === cat).map(i => `<div class="suggestion-item" data-id="${i.id}" style="padding:0.5rem; cursor:pointer;">${i.name} — ${formatCurrency(i.price)}</div>`).join('');
-                    container.innerHTML = `<div style="font-weight:700; margin-bottom:0.25rem;">${cat}</div>${list}`;
-                    return;
-                }
+            const cat = Object.keys(inventory.reduce((acc, s) => (acc[s.category] = true, acc), {})).find(c => c.toLowerCase().includes(q));
+            if (cat) {
+                const list = inventory.filter(i => i.category === cat).map(i => `<div class="suggestion-item" data-id="${i.id}" style="padding:0.5rem; cursor:pointer;">${i.name} — ${formatCurrency(i.price)}</div>`).join('');
+                container.innerHTML = `<div style="font-weight:700; margin-bottom:0.25rem;">${cat}</div>${list}`;
+                return;
+            }
             }
 
             // If empty query, show categories list
             if (!q) {
-                const cats = [...new Set(inventory.map(i => i.category))];
-                container.innerHTML = cats.map(c => `<button class="suggestion-item" data-category="${c}" style="margin:0.25rem; padding:0.35rem 0.6rem;">${c}</button>`).join('');
-                return;
+            const cats = [...new Set(inventory.map(i => i.category))];
+            container.innerHTML = cats.map(c => `<button class="suggestion-item" data-category="${c}" style="margin:0.25rem; padding:0.35rem 0.6rem;">${c}</button>`).join('');
+            return;
             }
 
             // Search services and categories
             const matches = inventory.filter(i => i.name.toLowerCase().includes(q) || i.category.toLowerCase().includes(q));
             if (matches.length === 0) {
-                container.innerHTML = `<div style="color:var(--text-secondary);">No matches for "${query}"</div>`;
-                return;
+            container.innerHTML = `<div style="color:var(--text-secondary);">No matches for "${query}"</div>`;
+            return;
             }
 
             // Group matches by category
             const groups = matches.reduce((acc, s) => { if (!acc[s.category]) acc[s.category] = []; acc[s.category].push(s); return acc; }, {});
             container.innerHTML = Object.keys(groups).map(cat => `<div style="margin-bottom:0.5rem;"><div style="font-weight:700;">${cat}</div>${groups[cat].map(i => `<div class="suggestion-item" data-id="${i.id}" style="padding:0.35rem; cursor:pointer;">${i.name} — ${formatCurrency(i.price)}</div>`).join('')}</div>`).join('');
         }
+
+        // --- Inventory Page Autocomplete Logic ---
+        function attachInventorySearchAutocomplete() {
+            const input = document.getElementById('inventorySearch');
+            const suggestionsBox = document.getElementById('inventorySuggestions');
+            if (!input || !suggestionsBox) return;
+
+            input.addEventListener('input', function () {
+            const query = this.value.trim().toLowerCase();
+            if (!query) {
+                suggestionsBox.style.display = 'none';
+                return;
+            }
+            // Find matches
+            const matches = inventory.filter(item =>
+                item.name.toLowerCase().includes(query) ||
+                item.category.toLowerCase().includes(query)
+            );
+            if (matches.length === 0) {
+                suggestionsBox.innerHTML = `<div class="autocomplete-item" style="color:var(--text-secondary);">No matches for "${this.value}"</div>`;
+                suggestionsBox.style.display = 'block';
+                return;
+            }
+            suggestionsBox.innerHTML = matches.map(item =>
+                `<div class="autocomplete-item" data-id="${item.id}">${item.name} <span style="color:var(--text-secondary); font-size:0.85em;">(${item.category})</span> — <strong>${formatCurrency(item.price)}</strong></div>`
+            ).join('');
+            suggestionsBox.style.display = 'block';
+            });
+
+            input.addEventListener('focus', function () {
+            if (this.value.trim()) input.dispatchEvent(new Event('input'));
+            });
+
+            input.addEventListener('blur', function () {
+            setTimeout(() => { suggestionsBox.style.display = 'none'; }, 150);
+            });
+
+            suggestionsBox.addEventListener('mousedown', function (e) {
+            const item = e.target.closest('.autocomplete-item');
+            if (!item) return;
+            const id = item.dataset.id;
+            const targetElement = document.getElementById(`inventory-item-${id}`);
+
+            if (targetElement) {
+                // Clear the search query to show the full list
+                appState.inventorySearchQuery = '';
+                input.value = '';
+                suggestionsBox.style.display = 'none';
+
+                // Re-render to ensure the full list is visible before scrolling
+                renderApp();
+
+                // Use a timeout to ensure the element exists in the DOM after re-render
+                setTimeout(() => {
+                    const elementToScrollTo = document.getElementById(`inventory-item-${id}`);
+                    elementToScrollTo.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    elementToScrollTo.style.transition = 'background-color 0.5s';
+                    elementToScrollTo.style.backgroundColor = 'var(--accent-light)';
+                    setTimeout(() => { elementToScrollTo.style.backgroundColor = ''; }, 2000); // Remove highlight after 2 seconds
+                }, 100);
+            }
+            });
+        }
+
+        // Patch renderApp to attach inventory autocomplete after rendering inventory page
+        const originalRenderApp = renderApp;
+        renderApp = function () {
+            originalRenderApp();
+            if (appState.currentView === 'inventory') {
+            attachInventorySearchAutocomplete();
+            }
+        };
+
+        function renderAdvancedFilter() {
+            const filters = appState.recordFilters;
+            return `
+                <div class="filter-section">
+                    <div class="filter-group">
+                        <label>Filter By</label>
+                        <select class="form-select" onchange="updateFilterType(this.value)">
+                            <option value="all" ${filters.filterType === 'all' ? 'selected' : ''}>Daily View</option>
+                            <option value="date" ${filters.filterType === 'date' ? 'selected' : ''}>Specific Date</option>
+                            <option value="month" ${filters.filterType === 'month' ? 'selected' : ''}>Month</option>
+                            <option value="year" ${filters.filterType === 'year' ? 'selected' : ''}>Year</option>
+                        </select>
+                    </div>
+
+                    ${filters.filterType === 'date' ? `
+                        <div class="filter-group">
+                            <label>Date</label>
+                            <input type="date" class="form-input" value="${filters.date}" onchange="updateFilter('date', this.value)">
+                        </div>
+                    ` : ''}
+
+                    ${filters.filterType === 'month' ? `
+                        <div class="filter-group">
+                            <label>Month</label>
+                            <input type="month" class="form-input" value="${filters.month}" onchange="updateFilter('month', this.value)">
+                        </div>
+                    ` : ''}
+
+                    ${filters.filterType === 'year' ? `
+                        <div class="filter-group">
+                            <label>Year</label>
+                            <input type="number" class="form-input" placeholder="YYYY" value="${filters.year}" onchange="updateFilter('year', this.value)">
+                        </div>
+                    ` : ''}
+
+                    <div class="filter-group">
+                        <label>&nbsp;</label>
+                        <button onclick="clearFilters()" class="btn-secondary">Clear Filters</button>
+                    </div>
+                </div>
+            `;
+        }
+
 
         function submitBilling() {
             if (appState.billingData.selectedServices.length === 0) {
@@ -4161,6 +5210,7 @@ async function loadData() {
                 patientName: appState.billingData.patientName,
                 pid: appState.billingData.pid,
                 // store services as objects with name, category and price so VIP overrides are preserved
+                discount: appState.billingData.discount,
                 services: appState.billingData.selectedServices.map(s => ({ name: s.name, category: s.category || (inventory.find(i => i.name === s.name) || {}).category || '', price: (s.overridePrice != null ? s.overridePrice : s.price) })),
                 total: appState.billingData.total,
                 status: appState.billingData.paymentStatus === 'full' ? 'PAID' : 'PENDING',
@@ -4181,6 +5231,11 @@ async function loadData() {
             autoSave(); // Save after adding a new order
             logAction('CREATE_BILLING', `Created new bill for '${newOrder.patientName}' (PID: ${newOrder.pid}) with a total of ${formatCurrency(newOrder.total)}.`);
 
+            // Ask for permission to print receipt
+            if (confirm(`Billing complete. Do you want to print a receipt for "${newOrder.patientName}"?`)) {
+                printReceipt(newOrder);
+            }
+
             appState.billingData = {
                 patientName: '', pid: '', contact: '', referredBy: '', staffName: '',
                 selectedServices: [], discount: 0, total: 0, paymentMethod: 'cash', paymentStatus: 'full',
@@ -4197,6 +5252,7 @@ async function loadData() {
             appState.showAddStaffForm = false;
             appState.editingPRId = null;
             appState.editingInventoryId = null;
+            appState.editingCategoryName = null;
         }
 
         function toggleAddPRForm() {
@@ -4389,6 +5445,22 @@ async function loadData() {
             renderApp();
         }
 
+        function updateHistoryFilter(key, value) {
+            appState.historyFilters[key] = value;
+            appState.analytics.historyPage = 0; // Reset pagination on filter change
+            renderApp();
+        }
+
+        function clearHistoryFilters() {
+            appState.historyFilters = { user: '', action: '', startDate: '', endDate: '' };
+            renderApp();
+        }
+
+        function updateFilter(key, value) {
+            appState.recordFilters[key] = value;
+            renderApp();
+        }
+
         function updateFilter(key, value) {
             appState.recordFilters[key] = value;
             renderApp();
@@ -4398,7 +5470,6 @@ async function loadData() {
             appState.recordFilters = { date: '', month: '', year: '', time: '', filterType: 'all', searchQuery: '', dailySummaryDate: new Date(), prManagementSearchQuery: '', searchAllRecords: false };
             renderApp();
         }
-
         function navigateToCurrentDayRecords() {
             appState.recordsViewDate = new Date();
             renderApp();
