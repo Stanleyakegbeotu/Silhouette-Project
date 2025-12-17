@@ -955,6 +955,8 @@
 
         appState.showFullDailyTestRecord = false;
         appState.dailyTestRecordViewDate = new Date();
+        appState.showFullDailyCommissionReport = false;
+        appState.dailyCommissionViewDate = new Date();
         appState.historySearchQuery = '';
         appState.recordsViewDate = new Date(); // Add this for the records page pagination
         appState.recordsViewDate = new Date();
@@ -1586,6 +1588,8 @@ function autoSave() {
 
 
 async function saveData() {
+    recoverUI();
+    clearAllEventListeners();
     if (window.electronAPI) {
 
         // Build data object
@@ -1604,6 +1608,17 @@ async function saveData() {
 
         // Send to backend
         await window.electronAPI.saveData(cleanData);
+        // Post-save sanity check: if inputs remain disabled after save, attempt recovery
+        setTimeout(() => {
+            const disabledEls = document.querySelectorAll('input:disabled, button:disabled, textarea:disabled, select:disabled');
+            if (disabledEls.length > 0) {
+                console.warn('Post-save check: found disabled elements, attempting recoverUI');
+                recoverUI();
+                clearAllEventListeners();
+                // Re-render to re-attach event listeners
+                try { renderApp(); } catch(e) { console.error(e); }
+            }
+        }, 120);
     }
 }
 
@@ -1656,6 +1671,17 @@ async function loadData() {
             }
             logAction('SAVE_DRAFT', `Saved draft for '${draftData.patientName}'.`);
             autoSave();
+
+            // Post-draft save recovery check
+            setTimeout(() => {
+                const disabledEls = document.querySelectorAll('input:disabled, button:disabled, textarea:disabled, select:disabled');
+                if (disabledEls.length > 0) {
+                    console.warn('Post-draft-save check: found disabled elements, attempting recoverUI');
+                    recoverUI();
+                    clearAllEventListeners();
+                    try { renderApp(); } catch(e) { console.error(e); }
+                }
+            }, 120);
         }
 
         // Ensure billing data has required fields and sensible defaults (used when loading drafts)
@@ -1719,7 +1745,7 @@ async function loadData() {
             if (appState.modal.type === 'navConfirm') {
                 // Ensure we have a patient name before saving a draft
                 if (!appState.billingData.patientName || !appState.billingData.patientName.trim()) {
-                    alert('Cannot save draft: patient name is required to save a draft.');
+                    showModal('Cannot save draft: patient name is required to save a draft.', 'warning');
                     return;
                 }
                 saveDraft();
@@ -1732,7 +1758,7 @@ async function loadData() {
                 renderApp();
             } else if (appState.modal.type === 'cancelBilling') {
                 if (!appState.billingData.patientName || !appState.billingData.patientName.trim()) {
-                    alert('Cannot save draft: patient name is required to save a draft.');
+                    showModal('Cannot save draft: patient name is required to save a draft.', 'warning');
                     return;
                 }
                 // Save draft and keep user on billing (but reset the current form)
@@ -1960,6 +1986,73 @@ async function loadData() {
         .sort((a, b) => b.orders - a.orders);
 }
 
+        // Calculate commission for a single order: sum of test prices * 10%
+        function calculateOrderCommission(order) {
+            if (!order || !order.services || order.services.length === 0) return (order.total || 0) * 0.10;
+
+            let totalServicePrice = 0;
+            order.services.forEach(service => {
+                let price = 0;
+                if (typeof service === 'number') {
+                    price = service;
+                } else if (typeof service === 'string') {
+                    const inv = inventory.find(i => i.name === service);
+                    if (inv && inv.price) price = Number(inv.price) || 0;
+                } else if (service && service.price) {
+                    price = Number(service.price) || 0;
+                }
+                totalServicePrice += price;
+            });
+
+            if (totalServicePrice === 0) totalServicePrice = order.total || 0;
+            return totalServicePrice * 0.10; // 10% commission
+        }
+
+        function getFilteredPRCommissions() {
+            const { start, end } = appState.analyticsDateRange;
+            const startDate = new Date(start);
+            const endDate = new Date(end);
+
+            const prStats = {};
+            orders.filter(order => {
+                const orderDate = new Date(order.date);
+                return orderDate >= startDate && orderDate <= endDate;
+            }).forEach(order => {
+                const name = order.referredBy || 'Unknown';
+                if (!prStats[name]) prStats[name] = { orders: 0, revenue: 0, commission: 0 };
+                prStats[name].orders++;
+                prStats[name].revenue += order.total;
+                prStats[name].commission += calculateOrderCommission(order);
+            });
+
+            return Object.entries(prStats).map(([name, stats]) => ({
+                name,
+                orders: stats.orders,
+                revenue: stats.revenue,
+                commission: stats.commission
+            })).sort((a, b) => b.commission - a.commission);
+        }
+
+        function getDailyPRCommissions(date) {
+            const dateString = date.toISOString().split('T')[0];
+            const prStats = {};
+
+            orders.filter(order => new Date(order.date).toISOString().split('T')[0] === dateString)
+                .forEach(order => {
+                    const name = order.referredBy || 'Unknown';
+                    if (!prStats[name]) prStats[name] = { orders: 0, revenue: 0, commission: 0 };
+                    prStats[name].orders++;
+                    prStats[name].revenue += order.total;
+                    prStats[name].commission += calculateOrderCommission(order);
+                });
+
+            return Object.entries(prStats).map(([name, stats]) => ({
+                name,
+                orders: stats.orders,
+                revenue: stats.revenue,
+                commission: stats.commission
+            })).sort((a, b) => b.commission - a.commission);
+        }
 
         function getDailyTopTests(date) {
             const dateString = date.toISOString().split('T')[0];
@@ -2033,11 +2126,14 @@ async function loadData() {
             return Object.entries(summary).map(([category, data]) => ({ category, ...data }));
         }
 
+        // getFilteredRecords consolidated below (removed duplicate)
+        
+
         function getFilteredRecords() {
             const filters = appState.recordFilters;
-            let filtered = [...orders];
+            let filtered = [...orders]; // Start with a copy of all orders
 
-            // Handle different filter types
+            // Support explicit filter types (date, month, year)
             if (filters.filterType === 'date' && filters.date) {
                 filtered = filtered.filter(order => new Date(order.date).toISOString().split('T')[0] === filters.date);
             } else if (filters.filterType === 'month' && filters.month) {
@@ -2058,34 +2154,11 @@ async function loadData() {
             if (filters.searchQuery) {
                 const query = filters.searchQuery.toLowerCase();
                 filtered = filtered.filter(order =>
-                    order.patientName.toLowerCase().includes(query) ||
-                    order.pid.toLowerCase().includes(query)
+                    (order.patientName || '').toLowerCase().includes(query) ||
+                    (order.pid || '').toLowerCase().includes(query)
                 );
             }
 
-            return filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
-        }
-
-        function getFilteredRecords() {
-            const filters = appState.recordFilters;
-            let filtered = [...orders]; // Start with a copy of all orders
-
-            // 1. Filter by date unless "search all" is active
-            if (!filters.searchAllRecords) {
-                const viewDate = new Date(appState.recordsViewDate).toISOString().split('T')[0];
-                filtered = filtered.filter(order => {
-                    const orderDate = new Date(order.date).toISOString().split('T')[0];
-                    return orderDate === viewDate;
-                });
-            }
-            // 2. Apply search query
-            if (filters.searchQuery) {
-                const query = filters.searchQuery.toLowerCase();
-                filtered = filtered.filter(order => 
-                    order.patientName.toLowerCase().includes(query) || 
-                    order.pid.toLowerCase().includes(query)
-                );
-            }
             return filtered.sort((a, b) => new Date(b.date) - new Date(a.date)); // Always sort by most recent
         }
 
@@ -2267,13 +2340,14 @@ async function loadData() {
                         </div>
                     </div>
                 `,
-                handleLogin: function() {
+                handleLogin: async function() {
                     const username = document.getElementById('loginUsername').value.trim();
                     const password = document.getElementById('loginPassword').value;
                     if (!username || !password) {
-                        alert('Please enter both username and password');
+                        await showModal('Please enter both username and password', 'warning');
                         // Focus username for user convenience
-                        document.getElementById('loginUsername').focus();
+                        const userInput = document.getElementById('loginUsername');
+                        if (userInput) userInput.focus();
                         return;
                     }
                     // Check if user exists in the users array
@@ -2284,11 +2358,12 @@ async function loadData() {
                         appState.currentView = 'dashboard';
                         renderApp();
                     } else {
-                        alert('Invalid username or password. If no users exist, please set up the first admin user.');
+                        await showModal('Invalid username or password. If no users exist, please set up the first admin user.', 'error');
                         // Clear password and focus username for retry
-                        document.getElementById('loginPassword').value = '';
-                        document.getElementById('loginUsername').focus();
-                        // Do NOT call renderApp() here, just allow user to retry
+                        const pwInput = document.getElementById('loginPassword');
+                        const userInput = document.getElementById('loginUsername');
+                        if (pwInput) pwInput.value = '';
+                        if (userInput) userInput.focus();
                     }
                 },
                  
@@ -3175,6 +3250,74 @@ function updateHeaderDateTime() {
                         ` : ''}
                     </div>
 
+                    <!-- PR Agent Commissions -->
+                    <div class="card animate-slide-up" style="margin-top: 2rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                            <h3 style="font-weight: 700; font-size: 1.25rem; margin: 0;">PR Agent Commissions (10%)</h3>
+                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                <input type="month" id="commissionMonth" class="form-input" style="height:34px; padding:4px;" title="Select month for monthly report">
+                                <button class="btn-primary" onclick="printMonthlyCommissionReport()">&#128424;&#65039; Print Monthly</button>
+                                <input type="number" id="commissionYear" class="form-input" placeholder="YYYY" style="width:100px; height:34px; padding:4px;" min="2000" max="2100" title="Enter year for yearly report">
+                                <button class="btn-primary" onclick="printYearlyCommissionReport()">&#128424;&#65039; Print Yearly</button>
+                                <button class="btn-primary" onclick="printCommissionReport()">&#128424;&#65039; Print Commissions</button>
+                            </div>
+                        </div>
+                        <div class="responsive-table-wrapper">
+                            <table class="table">
+                                <thead><tr><th>Agent</th><th>Referrals</th><th>Total Revenue</th><th>Commission (10%)</th></tr></thead>
+                                <tbody>
+                                    ${(() => {
+                                        const commissions = getFilteredPRCommissions().slice(0,5);
+                                        if (commissions.length === 0) return `<tr><td colspan="4" style="text-align: center; color: var(--text-secondary); padding: 1rem;">No commissions in selected period.</td></tr>`;
+                                        return commissions.map(c => `
+                                            <tr>
+                                                <td><strong>${c.name}</strong></td>
+                                                <td>${c.orders}</td>
+                                                <td>${formatCurrency(c.revenue)}</td>
+                                                <td>${formatCurrency(c.commission)}</td>
+                                            </tr>
+                                        `).join('');
+                                    })()}
+                                </tbody>
+                            </table>
+                        </div>
+                        <button onclick="toggleFullDailyCommissionReport()" class="btn-secondary" style="margin-top: 1.5rem;">
+                            ${appState.showFullDailyCommissionReport ? 'Hide Daily Commission Report' : 'View Daily Commission Report'}
+                        </button>
+
+                        ${appState.showFullDailyCommissionReport ? `
+                            <div class="animate-fade-in" style="border-top: 1px solid var(--border); margin-top: 1.5rem; padding-top: 1.5rem;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                    <h4 style="font-weight: 600; font-size: 1.125rem;">Daily Commission Report for: ${appState.dailyCommissionViewDate.toLocaleDateString('en-CA')}</h4>
+                                    <div style="display: flex; gap: 0.5rem;">
+                                        <button class="btn-secondary" onclick="changeDailyCommissionDate(-1)">&#8592; Previous Day</button>
+                                        <button class="btn-secondary" onclick="changeDailyCommissionDate(1)" ${new Date(appState.dailyCommissionViewDate).setHours(0,0,0,0) >= new Date().setHours(0,0,0,0) ? 'disabled' : ''}>Next Day &#8594;</button>
+                                        <button class="btn-primary" onclick="printDailyCommissionReport()">&#128424;&#65039; Print Daily</button>
+                                    </div>
+                                </div>
+                                <div class="responsive-table-wrapper">
+                                    <table class="table">
+                                        <thead><tr><th>Agent</th><th>Referrals</th><th>Total Revenue</th><th>Commission (10%)</th></tr></thead>
+                                        <tbody>
+                                            ${(()=> {
+                                                const daily = getDailyPRCommissions(appState.dailyCommissionViewDate);
+                                                if (daily.length === 0) return `<tr><td colspan="4" style="text-align: center; color: var(--text-secondary); padding: 1rem;">No commissions for this day.</td></tr>`;
+                                                return daily.map(c => `
+                                                    <tr>
+                                                        <td><strong>${c.name}</strong></td>
+                                                        <td>${c.orders}</td>
+                                                        <td>${formatCurrency(c.revenue)}</td>
+                                                        <td>${formatCurrency(c.commission)}</td>
+                                                    </tr>
+                                                `).join('');
+                                            })()}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        ` : ''}
+                    </div>
+
                     <!-- Daily Top Tests -->
                     <div class="card animate-slide-up" style="margin-top: 2rem;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
@@ -3247,53 +3390,65 @@ function updateHeaderDateTime() {
             `;
         }
 
-        function loadDraft(index) {
+        async function loadDraft(index) {
             const draft = appState.drafts[index];
             if (!draft) return;
 
-            if (confirm(`This will replace any current billing information. Continue with draft for "${draft.patientName}"?`)) {
-                // Deep copy and normalize the draft data to avoid missing fields or invalid types
-                const raw = JSON.parse(JSON.stringify(draft));
-                appState.billingData = ensureBillingDataShape(raw);
-                appState.billingStep = draft.billingStep || 1;
-                appState.currentView = 'billing';
-
-                // Close any open modals/overlays that might remain set and block the UI
-                appState.viewingOrderId = null;
-                appState.editingPRId = null;
-                appState.editingInventoryId = null;
-                appState.showAddPRForm = false;
-                appState.showAddInventoryForm = false;
-                
-                // Remove the draft from the list now that it's loaded
-                appState.drafts.splice(index, 1);
-                autoSave();
-                renderApp();
-
-                // Give the UI a moment to mount then ensure billing UI is interactive and up-to-date
-                setTimeout(() => {
-                    try {
-                        updateBillingCalculations();
-                        const patientNameInput = document.getElementById('patientName');
-                        if (patientNameInput) patientNameInput.focus();
-                    } catch (e) {
-                        console.warn('Error while finalizing draft load:', e);
-                    }
-                }, 60);
+            const confirmed = await showConfirm(`This will replace any current billing information. Continue with draft for "${draft.patientName}"?`);
+            if (!confirmed) {
+                return; // User cancelled
             }
+
+            // Deep copy and normalize the draft data to avoid missing fields or invalid types
+            const raw = JSON.parse(JSON.stringify(draft));
+            appState.billingData = ensureBillingDataShape(raw);
+            appState.billingStep = draft.billingStep || 1;
+            appState.currentView = 'billing';
+
+            // Close any open modals/overlays that might remain set and block the UI
+            appState.viewingOrderId = null;
+            appState.editingPRId = null;
+            appState.editingInventoryId = null;
+            appState.showAddPRForm = false;
+            appState.showAddInventoryForm = false;
+            
+            // Remove the draft from the list now that it's loaded
+            appState.drafts.splice(index, 1);
+            autoSave();
+            renderApp();
+
+            // Give the UI a moment to mount then ensure billing UI is interactive and up-to-date
+            setTimeout(() => {
+                try {
+                    updateBillingCalculations();
+                    const patientNameInput = document.getElementById('patientName');
+                    if (patientNameInput) patientNameInput.focus();
+                    // recovery after loading draft
+                    const disabledEls = document.querySelectorAll('input:disabled, button:disabled, textarea:disabled, select:disabled');
+                    if (disabledEls.length > 0) {
+                        console.warn('Post-draft-load check: found disabled elements, attempting recoverUI');
+                        recoverUI();
+                        clearAllEventListeners();
+                        try { renderApp(); } catch(e) { console.error(e); }
+                    }
+                } catch (e) {
+                    console.warn('Error while finalizing draft load:', e);
+                }
+            }, 60);
         }
 
         function deleteDraft(index) {
             const draft = appState.drafts[index];
             if (!draft) return;
 
-            if (confirm(`Are you sure you want to delete the draft for "${draft.patientName}"? This action cannot be undone.`)) {
+            showConfirm(`Are you sure you want to delete the draft for "${draft.patientName}"? This action cannot be undone.`).then(confirmed => {
+                if (!confirmed) return;
                 const deletedDraftName = draft.patientName;
                 appState.drafts.splice(index, 1);
                 logAction('DELETE_DRAFT', `Deleted draft for '${deletedDraftName}'.`);
                 autoSave();
                 renderApp();
-            }
+            });
         }
 
         function renderStaffManagement() {
@@ -3600,13 +3755,13 @@ function updateHeaderDateTime() {
             `;
         }
         
-        function saveCategoryRename(oldName, event) {
+        async function saveCategoryRename(oldName, event) {
             const newNameInput = document.getElementById(`edit-category-input-${oldName}`);
             if (!newNameInput) return;
 
             const newName = newNameInput.value.trim();
             if (!newName) {
-                alert('Category name cannot be empty.');
+                showModal('Category name cannot be empty.', 'warning');
                 return;
             }
 
@@ -3619,8 +3774,21 @@ function updateHeaderDateTime() {
 
             // Check if the new category name already exists
             const allCategories = [...new Set(inventory.map(item => item.category))];
-            if (allCategories.some(cat => cat.toLowerCase() === newName.toLowerCase())) {
-                alert(`The category "${newName}" already exists. Please choose a unique name.`);
+            const existingCategory = allCategories.find(cat => cat.toLowerCase() === newName.toLowerCase());
+
+            if (existingCategory && existingCategory.toLowerCase() !== oldName.toLowerCase()) {
+                // The new name matches another existing category. Ask to merge.
+                const mergeConfirmed = await showConfirm(`The category "${newName}" already exists. Do you want to merge all items from "${oldName}" into "${newName}"? This action cannot be undone.`);
+                if (!mergeConfirmed) {
+                    // User cancelled the merge operation.
+                    return;
+                }
+                // If confirmed, the logic will proceed to rename, effectively merging the categories.
+            } else if (existingCategory && existingCategory.toLowerCase() === oldName.toLowerCase() && existingCategory !== newName) {
+                // This handles case changes, e.g., renaming "lab" to "LAB". No confirmation needed.
+            } else if (existingCategory) {
+                // This case should not be hit if logic is correct, but as a safeguard:
+                showModal(`The category "${newName}" already exists. Please choose a unique name or an existing one to merge.`, 'warning');
                 return;
             }
 
@@ -3631,13 +3799,13 @@ function updateHeaderDateTime() {
                 }
             });
 
-            logAction('RENAME_CATEGORY', `Renamed category from '${oldName}' to '${newName}'. This affected all associated tests.`);
+            logAction('RENAME_CATEGORY', `Renamed/Merged category from '${oldName}' to '${newName}'. This affected all associated tests.`);
             autoSave();
 
             // Exit editing mode and re-render
             appState.editingCategoryName = null;
             renderApp();
-            alert(`Category '${oldName}' has been successfully renamed to '${newName}'.`);
+            showModal(`Category '${oldName}' has been successfully renamed/merged into '${newName}'.`, 'success');
         }
 
         function handleChangePassword() {
@@ -3948,24 +4116,29 @@ function updateHeaderDateTime() {
                 return `<div class="card"><p>Access Denied: Only admins can view the history log.</p></div>`;
             }
 
-            const searchQuery = appState.historySearchQuery.toLowerCase();
+            const searchQuery = (appState.historySearchQuery || '').toLowerCase();
             const filters = appState.historyFilters;
             const filteredLog = auditLog.filter(log => {
-                if (!searchQuery) return true;
-                const userMatch = log.user.toLowerCase().includes(searchQuery);
-                const actionMatch = log.action.toLowerCase().replace('_', ' ').includes(searchQuery);
-                return userMatch || actionMatch;
+                // Date filtering
                 const logDate = new Date(log.timestamp);
                 const startDate = filters.startDate ? new Date(filters.startDate) : null;
                 const endDate = filters.endDate ? new Date(filters.endDate) : null;
-
                 if (startDate) startDate.setHours(0, 0, 0, 0);
                 if (endDate) endDate.setHours(23, 59, 59, 999);
 
-                return (!filters.user || log.user === filters.user) &&
-                       (!filters.action || log.action === filters.action) &&
-                       (!startDate || logDate >= startDate) &&
-                       (!endDate || logDate <= endDate);
+                const matchesUserFilter = !filters.user || (log.user === filters.user);
+                const matchesActionFilter = !filters.action || (log.action === filters.action);
+                const matchesDateRange = (!startDate || logDate >= startDate) && (!endDate || logDate <= endDate);
+
+                if (searchQuery) {
+                    const userMatch = (log.user || '').toLowerCase().includes(searchQuery);
+                    const actionMatch = (log.action || '').toLowerCase().replace(/_/g, ' ').includes(searchQuery);
+                    // If search query is present, it must match user or action AND other filters must also match
+                    return (userMatch || actionMatch) && matchesUserFilter && matchesActionFilter && matchesDateRange;
+                }
+
+                // If no search query, rely only on the explicit filters
+                return matchesUserFilter && matchesActionFilter && matchesDateRange;
             });
 
             
@@ -4063,6 +4236,69 @@ function updateHeaderDateTime() {
             appState.colorTheme = theme;
             applyTheme();
             renderApp();
+        }
+
+        // Remove event listeners by replacing elements with clones (used as a cleanup step before re-attaching)
+        function clearAllEventListeners() {
+            // Do not remove listeners from active modal dialogs
+            const activeModal = document.querySelector('[data-silhouette-modal]');
+            document.querySelectorAll('input, button, select, textarea, a, div, span').forEach(el => {
+                try {
+                    // Skip nodes that are part of an active modal (so confirm buttons remain clickable)
+                    if (activeModal && (el === activeModal || el.closest('[data-silhouette-modal]'))) return;
+                    // Also skip body and html
+                    if (el === document.body || el === document.documentElement) return;
+                    const clone = el.cloneNode(true);
+                    if (el.parentNode) el.parentNode.replaceChild(clone, el);
+                } catch (e) {
+                    // ignore cloning errors for certain nodes
+                }
+            });
+        }
+
+        // Detect and remove any full-screen blocking overlays (e.g., invisible divs) that might capture pointer events
+        function detectAndRemoveBlockingOverlays() {
+            const candidates = Array.from(document.body.querySelectorAll('*')).filter(el => {
+                try {
+                    const s = window.getComputedStyle(el);
+                    const rect = el.getBoundingClientRect();
+                    const coversViewport = rect.width >= window.innerWidth - 2 && rect.height >= window.innerHeight - 2 && rect.top <= 0 && rect.left <= 0;
+                    const visible = s.display !== 'none' && s.visibility !== 'hidden' && parseFloat(s.opacity || '1') > 0;
+                    const captures = s.pointerEvents !== 'none';
+                    return (s.position === 'fixed' || s.position === 'absolute') && coversViewport && visible && captures;
+                } catch (e) {
+                    return false;
+                }
+            });
+            if (candidates.length) {
+                candidates.forEach(el => {
+                    console.warn('Removing blocking overlay:', el);
+                    el.remove();
+                });
+                return true;
+            }
+            return false;
+        }
+
+        // Defensive UI recovery: remove overlays and re-enable inputs
+        function recoverUI() {
+            // Remove unexpected modal-like overlays but do not remove active app modals (data-silhouette-modal)
+            document.querySelectorAll('.modal-backdrop, .modal, .backdrop').forEach(el => {
+                if (!el.closest('[data-silhouette-modal]')) {
+                    console.info('recoverUI: removing overlay', el);
+                    el.remove();
+                }
+            });
+            // Remove any blocking overlays we didn't expect
+            detectAndRemoveBlockingOverlays();
+            // Re-enable all inputs/buttons
+            document.querySelectorAll('input, button, select, textarea').forEach(el => {
+                try { el.disabled = false; el.readOnly = false; } catch(e) {}
+            });
+            // Ensure body can receive pointer events
+            try { document.body.style.pointerEvents = ''; } catch(e) {}
+            // Re-attach event listeners
+            try { attachEventListeners(); } catch(e) {}
         }
 
         function attachEventListeners() {
@@ -4636,6 +4872,7 @@ function updateHeaderDateTime() {
             const query = document.getElementById('referredBySearch').value.trim();
             if (!query) {
                 alert('Please enter a PR agent name');
+                                    showModal('Please enter a PR agent name', 'warning');
                 return;
             }
             const phone = prompt(`Enter phone number for "${query}" (optional):`, '');
@@ -4658,17 +4895,17 @@ function updateHeaderDateTime() {
             const setupPasswordConfirm = document.getElementById('setupPasswordConfirm').value;
 
             if (!setupName || !setupUsername || !setupPassword || !setupPasswordConfirm) {
-                alert('Please fill in all fields');
+                showModal('Please fill in all fields', 'warning');
                 return;
             }
 
             if (setupPassword !== setupPasswordConfirm) {
-                alert('Passwords do not match');
+                showModal('Passwords do not match', 'warning');
                 return;
             }
 
             if (setupPassword.length < 6) {
-                alert('Password must be at least 6 characters');
+                showModal('Password must be at least 6 characters', 'warning');
                 return;
             }
 
@@ -4734,6 +4971,7 @@ function updateHeaderDateTime() {
                 saveDraft(); // Auto-save draft when moving to step 2
                 if (!appState.billingData.patientName || !appState.billingData.staffName) {
                     alert('Please fill in Patient Name and Staff Name');
+                                        showModal('Please fill in Patient Name and Staff Name', 'warning');
                     return;
                 }
             }
@@ -4796,17 +5034,27 @@ function updateHeaderDateTime() {
             appState.billingData.discount = finalDiscount;
             appState.billingData.total = total;
 
-            if (servicesHTML) {
-                selectedServicesListEl.innerHTML = servicesHTML + (selected.length ? `<div style="margin-top:0.5rem;"><small style="color:var(--text-secondary);">Click a selected item below to remove it.</small></div>` : '');
+            if (selectedServicesListEl) {
+                if (servicesHTML) {
+                    selectedServicesListEl.innerHTML = servicesHTML + (selected.length ? `<div style="margin-top:0.5rem;"><small style="color:var(--text-secondary);">Click a selected item below to remove it.</small></div>` : '');
+                } else {
+                    selectedServicesListEl.innerHTML = `<div style="color: var(--text-secondary); text-align: center;">No services selected yet.</div>`;
+                }
             } else {
-                selectedServicesListEl.innerHTML = `<div style="color: var(--text-secondary); text-align: center;">No services selected yet.</div>`;
+                // no selected services container present in current view
+                // keep calculations but skip DOM update
             }
 
-            document.getElementById('subtotal').textContent = formatCurrency(subtotal);
-            document.getElementById('discountDisplay').textContent = formatCurrency(finalDiscount);
-            document.getElementById('totalAmount').textContent = formatCurrency(total);
-            if (document.getElementById('receiptTotal')) document.getElementById('receiptTotal').textContent = formatCurrency(total);
-            if (document.getElementById('receiptServices')) document.getElementById('receiptServices').innerHTML = (appState.billingData.selectedServices || []).map(s => `<div style="display:flex; justify-content:space-between;"><span>• ${s.name}${s.overridePrice != null ? ' (VIP)' : ''}</span><span>${formatCurrency(s.overridePrice != null ? s.overridePrice : s.price)}</span></div>`).join('');
+            const subtotalEl = document.getElementById('subtotal');
+            if (subtotalEl) subtotalEl.textContent = formatCurrency(subtotal);
+            const discountEl = document.getElementById('discountDisplay');
+            if (discountEl) discountEl.textContent = formatCurrency(finalDiscount);
+            const totalEl = document.getElementById('totalAmount');
+            if (totalEl) totalEl.textContent = formatCurrency(total);
+            const receiptTotalEl = document.getElementById('receiptTotal');
+            if (receiptTotalEl) receiptTotalEl.textContent = formatCurrency(total);
+            const receiptServicesEl = document.getElementById('receiptServices');
+            if (receiptServicesEl) receiptServicesEl.innerHTML = (appState.billingData.selectedServices || []).map(s => `<div style="display:flex; justify-content:space-between;"><span>• ${s.name}${s.overridePrice != null ? ' (VIP)' : ''}</span><span>${formatCurrency(s.overridePrice != null ? s.overridePrice : s.price)}</span></div>`).join('');
         }
 
         function selectPaymentStatus(status) {
@@ -4892,12 +5140,24 @@ function updateHeaderDateTime() {
             const paidAmount = parseFloat(amount) || 0;
             appState.billingData.amountPaid = paidAmount;
             appState.billingData.balance = Math.max(0, appState.billingData.total - paidAmount);
-            if (appState.billingData.paymentMethod !== 'split') {
-                renderApp();
+
+            // Directly update the UI elements instead of re-rendering the whole app
+            const receiptAmountEl = document.getElementById('receiptAmountPaid');
+            const receiptBalanceEl = document.getElementById('receiptBalance');
+            const balanceDisplayEl = document.querySelector('#step3 .animate-fade-in strong');
+
+            if (receiptAmountEl) {
+                receiptAmountEl.textContent = formatCurrency(paidAmount);
+            }
+            if (receiptBalanceEl) {
+                receiptBalanceEl.textContent = formatCurrency(appState.billingData.balance);
+            }
+            if (balanceDisplayEl) {
+                balanceDisplayEl.textContent = formatCurrency(appState.billingData.balance);
             }
         }
 
-        function printReceipt(order) {
+        function buildReceiptHTML(order) {
             // Support services stored either as array of names or array of {name, price, category} objects
             const serviceDetails = order.services.map(s => {
                 if (typeof s === 'string') {
@@ -4909,7 +5169,7 @@ function updateHeaderDateTime() {
             });
             const subtotal = serviceDetails.reduce((sum, s) => sum + s.price, 0);
 
-            const receiptHTML = `
+            return `
                 <html>
                 <head>
                     <title>Official Receipt - ${order.pid}</title>
@@ -4992,6 +5252,10 @@ function updateHeaderDateTime() {
                         </div>
                     </div>
                 </body></html>`;
+        }
+
+        function printReceipt(order) {
+            const receiptHTML = buildReceiptHTML(order);
 
             const printFrame = document.createElement('iframe');
             printFrame.style.display = 'none';
@@ -5001,10 +5265,82 @@ function updateHeaderDateTime() {
             document.body.removeChild(printFrame);
         }
 
+        function showReceiptPreview(order) {
+            // Simplified preview: show iframe, Print and Cancel. After any action (print or cancel), resolve so caller will navigate back to Dashboard.
+            return new Promise((resolve) => {
+                try {
+                    const modal = document.createElement('div');
+                    modal.style.cssText = `position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 20px;`;
+                    modal.dataset.silhouetteModal = 'true';
+
+                    modal.innerHTML = `
+                        <div style="background: var(--surface); border-radius: 0.5rem; padding: 0.5rem; width: 860px; max-width: 95%; box-shadow: 0 10px 25px rgba(0,0,0,0.2); color: var(--text-primary); display:flex; flex-direction: column; gap:0.5rem; max-height: calc(100vh - 60px);">
+                            <div style="display:flex; justify-content:space-between; align-items:center; padding: 0.5rem 1rem; border-bottom: 1px solid #e6eef8;">
+                                <h3 style="margin:0;">Receipt Preview</h3>
+                                <div style="font-size:0.9rem; color:var(--text-secondary);">Printing is handled by your system dialog. After printing or cancelling you'll return to the Dashboard.</div>
+                            </div>
+                            <div style="flex:1 1 auto; overflow:auto; padding:1rem; background:#fff; border-top:1px solid #e6eef8; border-bottom:1px solid #e6eef8;">
+                                <iframe id="receipt-preview-iframe" style="width:100%; min-height:360px; border:none; background:white;" srcdoc=""></iframe>
+                            </div>
+                            <div style="display:flex; gap:0.75rem; justify-content:flex-end; padding:0.75rem;">
+                                <button data-print-btn style="background:var(--primary); color:white; border:none; padding:0.6rem 1rem; border-radius:0.25rem; cursor:pointer; font-weight:600;">Print</button>
+                                <button data-back-btn style="background:var(--border); color:var(--text-primary); border:none; padding:0.6rem 1rem; border-radius:0.25rem; cursor:pointer; font-weight:600;">Cancel</button>
+                            </div>
+                        </div>
+                    `;
+
+                    document.body.appendChild(modal);
+                    const iframe = modal.querySelector('#receipt-preview-iframe');
+                    try { iframe.srcdoc = buildReceiptHTML(order); } catch(e) { console.error('Error loading preview iframe:', e); }
+
+                    // Buttons
+                    const printBtn = modal.querySelector('[data-print-btn]');
+                    const backBtn = modal.querySelector('[data-back-btn]');
+
+                    function cleanupAndResolve(result) {
+                        try { if (modal.parentNode) modal.parentNode.removeChild(modal); } catch(e) {}
+                        resolve(result);
+                    }
+
+                    if (printBtn) {
+                        printBtn.addEventListener('click', (ev) => {
+                            try { ev && ev.preventDefault && ev.preventDefault(); ev && ev.stopPropagation && ev.stopPropagation(); } catch(e) {}
+                            try {
+                                if (iframe && iframe.contentWindow && typeof iframe.contentWindow.print === 'function') {
+                                    iframe.contentWindow.focus();
+                                    iframe.contentWindow.print();
+                                } else {
+                                    printReceipt(order);
+                                }
+                            } catch (e) { console.error('print failed, fallback called:', e); try { printReceipt(order); } catch(e2) { console.error(e2); } }
+                            showToast('Receipt sent to printer', 'success', 900);
+                            // Immediately close preview so user can continue; submitBilling will navigate to Dashboard after this resolves
+                            cleanupAndResolve('printed');
+                        });
+                    }
+
+                    if (backBtn) {
+                        backBtn.addEventListener('click', (ev) => {
+                            try { ev && ev.preventDefault && ev.preventDefault(); ev && ev.stopPropagation && ev.stopPropagation(); } catch(e) {}
+                            showToast('Returning to Dashboard', 'info', 900);
+                            cleanupAndResolve('skipped');
+                        });
+                    }
+
+                    // focus print button for quick action
+                    try { setTimeout(() => { if (printBtn && typeof printBtn.focus === 'function') printBtn.focus(); }, 120); } catch(e) {}
+
+                } catch (e) {
+                    console.error('showReceiptPreview error:', e);
+                    resolve(null);
+                }
+            });
+        }
+
         function reprintReceiptById(orderId) {
             const order = orders.find(o => o.id === orderId);
             if (order) printReceipt(order);
-            else alert('Could not find order to print.');
+            else showModal('Could not find order to print.', 'error');
         }
 
         // --- Helper functions for new service selection flow ---
@@ -5131,15 +5467,6 @@ function updateHeaderDateTime() {
             });
         }
 
-        // Patch renderApp to attach inventory autocomplete after rendering inventory page
-        const originalRenderApp = renderApp;
-        renderApp = function () {
-            originalRenderApp();
-            if (appState.currentView === 'inventory') {
-            attachInventorySearchAutocomplete();
-            }
-        };
-
         function renderAdvancedFilter() {
             const filters = appState.recordFilters;
             return `
@@ -5184,21 +5511,31 @@ function updateHeaderDateTime() {
         }
 
 
-        function submitBilling() {
+        async function submitBilling() {
             if (appState.billingData.selectedServices.length === 0) {
-                alert('Please select at least one service');
+                await showModal('Please select at least one service', 'warning');
                 return;
             }
 
             if (appState.billingData.paymentStatus === 'installment' && appState.billingData.amountPaid <= 0) {
-                alert('For installment payments, please enter the amount paid.');
+                await showModal('For installment payments, please enter the amount paid.', 'warning');
                 return;
             }
 
-            // Add confirmation dialog before finalizing
+            // Combined confirmation: complete billing and preview/print receipt (include payment method)
             const totalAmountFormatted = formatCurrency(appState.billingData.total);
-            if (!confirm(`Are you sure you want to complete the billing for "${appState.billingData.patientName}" with a total of ${totalAmountFormatted}?`)) {
-                return; // User clicked 'Cancel', so we stop the function here.
+            // Describe payment method in a human-friendly way
+            let paymentDesc = '';
+            if ((appState.billingData.paymentMethod || '').toLowerCase() === 'split') {
+                const parts = Object.entries(appState.billingData.splitPayments || {}).filter(([k,v]) => v > 0).map(([k,v]) => `${k.toUpperCase()}: ${formatCurrency(v)}`);
+                paymentDesc = parts.length ? `Split (${parts.join(', ')})` : 'Split';
+            } else {
+                paymentDesc = (appState.billingData.paymentMethod || 'Cash').charAt(0).toUpperCase() + (appState.billingData.paymentMethod || 'cash').slice(1);
+            }
+
+            const confirmed = await showConfirm(`Complete billing for "${appState.billingData.patientName}" with a total of ${totalAmountFormatted} (Payment: ${paymentDesc})? Click Confirm to preview and print the receipt. You will be returned to the Dashboard after printing.`);
+            if (!confirmed) {
+                return; // User clicked 'Cancel'
             }
 
             // Find and remove the draft associated with this billing
@@ -5231,9 +5568,11 @@ function updateHeaderDateTime() {
             autoSave(); // Save after adding a new order
             logAction('CREATE_BILLING', `Created new bill for '${newOrder.patientName}' (PID: ${newOrder.pid}) with a total of ${formatCurrency(newOrder.total)}.`);
 
-            // Ask for permission to print receipt
-            if (confirm(`Billing complete. Do you want to print a receipt for "${newOrder.patientName}"?`)) {
-                printReceipt(newOrder);
+            // Show a receipt preview modal which allows printing. After printing (or skipping), return to dashboard
+            try {
+                await showReceiptPreview(newOrder);
+            } catch (e) {
+                console.error('Error in receipt preview flow:', e);
             }
 
             appState.billingData = {
@@ -5244,6 +5583,17 @@ function updateHeaderDateTime() {
             };
             appState.billingStep = 1;
             navigateTo('dashboard');
+
+            // Small deferred check and recovery to handle any lingering UI blocking states
+            setTimeout(() => {
+                const disabledEls = document.querySelectorAll('input:disabled, button:disabled, textarea:disabled, select:disabled');
+                if (disabledEls.length > 0) {
+                    console.warn('Post-billing check: found disabled elements, attempting recoverUI');
+                    recoverUI();
+                    clearAllEventListeners();
+                    try { renderApp(); } catch(e) { console.error(e); }
+                }
+            }, 120);
         }
 
         function resetAddForms() {
@@ -5354,12 +5704,13 @@ function updateHeaderDateTime() {
             const userToDelete = users.find(u => u.username === username);
             if (!userToDelete) return;
 
-            if (confirm(`Are you sure you want to delete "${userToDelete.fullName}"? This action cannot be undone.`)) {
+            showConfirm(`Are you sure you want to delete "${userToDelete.fullName}"? This action cannot be undone.`).then(confirmed => {
+                if (!confirmed) return;
                 users = users.filter(u => u.username !== username);
                 autoSave(); // Save the updated user list
                 logAction('DELETE_STAFF', `Deleted staff: '${userToDelete.fullName}' (Username: ${username}).`);
                 renderApp();
-            }
+            });
         }
 
         // Generic function to toggle edit mode for an item
@@ -5396,7 +5747,8 @@ function updateHeaderDateTime() {
         }
 
         function deletePR(id) {
-            if (confirm('Are you sure you want to delete this PR?')) {
+            showConfirm('Are you sure you want to delete this PR?').then(confirmed => {
+                if (!confirmed) return;
                 const index = prList.findIndex(p => p.id === id);
                 const prToDelete = prList[index];
                 if (index > -1) {
@@ -5405,7 +5757,7 @@ function updateHeaderDateTime() {
                 autoSave(); // Save changes
                 logAction('DELETE_PR', `Deleted PR: '${prToDelete.name}' (ID: ${prToDelete.id}).`);
                 renderApp();
-            }
+            });
         }
 
         function saveInventoryEdit(id) {
@@ -5424,7 +5776,8 @@ function updateHeaderDateTime() {
         }
 
         function deleteInventoryItem(id) {
-            if (confirm('Are you sure you want to delete this inventory item?')) {
+            showConfirm('Are you sure you want to delete this inventory item?').then(confirmed => {
+                if (!confirmed) return;
                 const index = inventory.findIndex(i => i.id === id);
                 const itemToDelete = inventory[index];
                 if (index > -1) {
@@ -5433,7 +5786,7 @@ function updateHeaderDateTime() {
                 autoSave(); // Save changes
                 logAction('DELETE_INVENTORY', `Deleted test: '${itemToDelete.name}' (ID: ${itemToDelete.id}).`);
                 renderApp();
-            }
+            });
         }
 
         function updateFilterType(type) {
@@ -5507,7 +5860,9 @@ function updateHeaderDateTime() {
 
         function markAsFullyPaid(orderId) {
             const order = orders.find(o => o.id === orderId);
-            if (order && confirm(`Are you sure you want to mark the order for ${order.patientName} (PID: ${order.pid}) as fully paid?`)) {
+            if (!order) return;
+            showConfirm(`Are you sure you want to mark the order for ${order.patientName} (PID: ${order.pid}) as fully paid?`).then(confirmed => {
+                if (!confirmed) return;
                 order.status = 'PAID';
                 order.paymentStatus = 'full';
                 order.balance = 0;
@@ -5516,10 +5871,9 @@ function updateHeaderDateTime() {
                 logAction('UPDATE_PAYMENT', `Marked order #${order.id} for '${order.patientName}' as fully paid.`);
                 printReceipt(order); // Print receipt after updating
                 renderApp(); // Re-render to update the modal view
-                alert('Payment updated successfully! The receipt will now be printed.');
-                printReceipt(order);
-                renderApp(); // Re-render to update the modal and the main records table
-            }
+                showModal('Payment updated successfully! The receipt will now be printed.', 'success');
+                // Second print handled with user confirmation above
+            });
         }
 
         function changePRPerformancePage(direction) {
@@ -5560,6 +5914,25 @@ function updateHeaderDateTime() {
                 return;
             }
             appState.dailyRecordViewDate = newDate;
+            renderApp();
+        }
+
+        function toggleFullDailyCommissionReport() {
+            appState.showFullDailyCommissionReport = !appState.showFullDailyCommissionReport;
+            if (appState.showFullDailyCommissionReport) {
+                appState.dailyCommissionViewDate = new Date();
+            }
+            renderApp();
+        }
+
+        function changeDailyCommissionDate(direction) {
+            const newDate = new Date(appState.dailyCommissionViewDate);
+            newDate.setDate(newDate.getDate() + direction);
+            // Prevent going into the future
+            if (newDate > new Date()) {
+                return;
+            }
+            appState.dailyCommissionViewDate = newDate;
             renderApp();
         }
 
@@ -5658,7 +6031,7 @@ function updateHeaderDateTime() {
             const contact = document.getElementById('companyContact').value;
 
             if (!name || !address || !email || !contact) {
-                alert('Please fill in all company profile fields.');
+                showModal('Please fill in all company profile fields.', 'warning');
                 return;
             }
 
@@ -5667,8 +6040,19 @@ function updateHeaderDateTime() {
             autoSave(); // Save updated profile to the main data file as well
             logAction('UPDATE_PROFILE', `Updated company profile information.`);
 
-            alert('Company profile updated successfully!');
+            showModal('Company profile updated successfully!', 'success');
             renderApp();
+
+            // Post-settings-save recovery check
+            setTimeout(() => {
+                const disabledEls = document.querySelectorAll('input:disabled, button:disabled, textarea:disabled, select:disabled');
+                if (disabledEls.length > 0) {
+                    console.warn('Post-company-save check: found disabled elements, attempting recoverUI');
+                    recoverUI();
+                    clearAllEventListeners();
+                    try { renderApp(); } catch(e) { console.error(e); }
+                }
+            }, 120);
         }
 
         function handleLogoUpload(event) {
@@ -5685,10 +6069,21 @@ function updateHeaderDateTime() {
                 localStorage.setItem('companyProfile', JSON.stringify(appState.companyProfile));
                 autoSave();
                 logAction('UPDATE_PROFILE', 'Updated company logo.');
-                alert('Logo updated successfully!');
+                showModal('Logo updated successfully!', 'success');
                 
                 // Re-render the app to show the new logo everywhere
                 renderApp();
+
+                // Post-logo-update recovery check
+                setTimeout(() => {
+                    const disabledEls = document.querySelectorAll('input:disabled, button:disabled, textarea:disabled, select:disabled');
+                    if (disabledEls.length > 0) {
+                        console.warn('Post-logo-update check: found disabled elements, attempting recoverUI');
+                        recoverUI();
+                        clearAllEventListeners();
+                        try { renderApp(); } catch(e) { console.error(e); }
+                    }
+                }, 120);
             };
             reader.readAsDataURL(file);
         }
@@ -5697,11 +6092,21 @@ function updateHeaderDateTime() {
             if (window.electronAPI) {
                 const result = await window.electronAPI.backupData();
                 if (result.success) {
-                    alert(`Data successfully backed up to: ${result.path}`);
+                    showModal(`Data successfully backed up to: ${result.path}`, 'success');
                 } else {
                     // Don't show an error if the user just cancelled the dialog
                     if (result.error) {
-                        alert(`Backup failed: ${result.error}`);
+                        showModal(`Backup failed: ${result.error}`, 'error');
+                        // Post-backup recovery check
+                        setTimeout(() => {
+                            const disabledEls = document.querySelectorAll('input:disabled, button:disabled, textarea:disabled, select:disabled');
+                            if (disabledEls.length > 0) {
+                                console.warn('Post-backup check: found disabled elements, attempting recoverUI');
+                                recoverUI();
+                                clearAllEventListeners();
+                                try { renderApp(); } catch(e) { console.error(e); }
+                            }
+                        }, 120);
                     } else {
                         console.log('Backup cancelled by user.');
                     }
@@ -5810,6 +6215,236 @@ function updateHeaderDateTime() {
                             <tbody>
                                 ${prPerformance.map(pr => `
                                     <tr><td>${pr.name}</td><td>${pr.orders}</td><td>${formatCurrency(pr.revenue)}</td></tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </body>
+                </html>
+            `;
+
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(printContent);
+            printWindow.document.close();
+            printWindow.print();
+        }
+
+        // Helper: compute PR commissions for an explicit date range
+        function getPRCommissionsInRange(startDate, endDate) {
+            const prStats = {};
+            orders.filter(order => {
+                const orderDate = new Date(order.date);
+                return orderDate >= startDate && orderDate <= endDate;
+            }).forEach(order => {
+                const name = order.referredBy || 'Unknown';
+                if (!prStats[name]) prStats[name] = { orders: 0, revenue: 0, commission: 0 };
+                prStats[name].orders++;
+                prStats[name].revenue += order.total;
+                prStats[name].commission += calculateOrderCommission(order);
+            });
+
+            return Object.entries(prStats).map(([name, stats]) => ({
+                name,
+                orders: stats.orders,
+                revenue: stats.revenue,
+                commission: stats.commission
+            })).sort((a, b) => b.commission - a.commission);
+        }
+
+        function printMonthlyCommissionReport() {
+            const monthVal = document.getElementById('commissionMonth')?.value;
+            if (!monthVal) {
+                showToast('Please select a month to print.', 'warning');
+                return;
+            }
+            const [year, month] = monthVal.split('-');
+            const start = new Date(Number(year), Number(month) - 1, 1);
+            const end = new Date(Number(year), Number(month), 0); // last day of selected month
+
+            const commissions = getPRCommissionsInRange(start, end);
+            const periodLabel = start.toLocaleString('en-CA', { month: 'long', year: 'numeric' });
+
+            const printContent = `
+                <html>
+                <head>
+                    <title>PR Agent Commission Report - ${periodLabel}</title>
+                    <style>
+                        body { font-family: sans-serif; }
+                        .report-header { text-align: center; margin-bottom: 2rem; }
+                        .report-header h1 { margin: 0; }
+                        .report-header p { margin: 5px 0; color: #555; }
+                        .section { margin-bottom: 2rem; border: 1px solid #ccc; padding: 1rem; border-radius: 8px; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+                        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                        th { background-color: #f2f2f2; }
+                    </style>
+                </head>
+                <body>
+                    <div class="report-header">
+                        <h1>PR Agent Commission Report</h1>
+                        <p><strong>${appState.companyProfile.name}</strong></p>
+                        <p>Period: <strong>${periodLabel}</strong></p>
+                    </div>
+
+                    <div class="section">
+                        <h2>Agent Commissions (10%)</h2>
+                        <table>
+                            <thead><tr><th>Agent Name</th><th>Orders</th><th>Revenue</th><th>Commission (10%)</th></tr></thead>
+                            <tbody>
+                                ${commissions.map(c => `
+                                    <tr><td>${c.name}</td><td>${c.orders}</td><td>${formatCurrency(c.revenue)}</td><td>${formatCurrency(c.commission)}</td></tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </body>
+                </html>
+            `;
+
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(printContent);
+            printWindow.document.close();
+            printWindow.print();
+        }
+
+        function printYearlyCommissionReport() {
+            const yearVal = document.getElementById('commissionYear')?.value;
+            if (!yearVal) {
+                showToast('Please enter a year to print.', 'warning');
+                return;
+            }
+            const year = Number(yearVal);
+            const start = new Date(year, 0, 1);
+            const end = new Date(year, 11, 31);
+
+            const commissions = getPRCommissionsInRange(start, end);
+            const periodLabel = `${year}`;
+
+            const printContent = `
+                <html>
+                <head>
+                    <title>PR Agent Commission Report - ${periodLabel}</title>
+                    <style>
+                        body { font-family: sans-serif; }
+                        .report-header { text-align: center; margin-bottom: 2rem; }
+                        .report-header h1 { margin: 0; }
+                        .report-header p { margin: 5px 0; color: #555; }
+                        .section { margin-bottom: 2rem; border: 1px solid #ccc; padding: 1rem; border-radius: 8px; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+                        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                        th { background-color: #f2f2f2; }
+                    </style>
+                </head>
+                <body>
+                    <div class="report-header">
+                        <h1>PR Agent Commission Report</h1>
+                        <p><strong>${appState.companyProfile.name}</strong></p>
+                        <p>Year: <strong>${periodLabel}</strong></p>
+                    </div>
+
+                    <div class="section">
+                        <h2>Agent Commissions (10%)</h2>
+                        <table>
+                            <thead><tr><th>Agent Name</th><th>Orders</th><th>Revenue</th><th>Commission (10%)</th></tr></thead>
+                            <tbody>
+                                ${commissions.map(c => `
+                                    <tr><td>${c.name}</td><td>${c.orders}</td><td>${formatCurrency(c.revenue)}</td><td>${formatCurrency(c.commission)}</td></tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </body>
+                </html>
+            `;
+
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(printContent);
+            printWindow.document.close();
+            printWindow.print();
+        }
+
+        function printCommissionReport() {
+            const { start, end } = appState.analyticsDateRange;
+            const commissions = getFilteredPRCommissions();
+
+            const printContent = `
+                <html>
+                <head>
+                    <title>PR Agent Commission Report</title>
+                    <style>
+                        body { font-family: sans-serif; }
+                        .report-header { text-align: center; margin-bottom: 2rem; }
+                        .report-header h1 { margin: 0; }
+                        .report-header p { margin: 5px 0; color: #555; }
+                        .section { margin-bottom: 2rem; border: 1px solid #ccc; padding: 1rem; border-radius: 8px; }
+                        .section h2 { margin-top: 0; border-bottom: 2px solid #333; padding-bottom: 0.5rem; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+                        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                        th { background-color: #f2f2f2; }
+                    </style>
+                </head>
+                <body>
+                    <div class="report-header">
+                        <h1>PR Agent Commission Report</h1>
+                        <p><strong>${appState.companyProfile.name}</strong></p>
+                        <p>Report for period: <strong>${start}</strong> to <strong>${end}</strong></p>
+                    </div>
+
+                    <div class="section">
+                        <h2>Agent Commissions</h2>
+                        <table>
+                            <thead><tr><th>Agent Name</th><th>Orders</th><th>Revenue</th><th>Commission (10%)</th></tr></thead>
+                            <tbody>
+                                ${commissions.map(c => `
+                                    <tr><td>${c.name}</td><td>${c.orders}</td><td>${formatCurrency(c.revenue)}</td><td>${formatCurrency(c.commission)}</td></tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </body>
+                </html>
+            `;
+
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(printContent);
+            printWindow.document.close();
+            printWindow.print();
+        }
+
+        function printDailyCommissionReport() {
+            const date = appState.dailyCommissionViewDate.toISOString().split('T')[0];
+            const daily = getDailyPRCommissions(appState.dailyCommissionViewDate);
+
+            const printContent = `
+                <html>
+                <head>
+                    <title>Daily Commission Report - ${date}</title>
+                    <style>
+                        body { font-family: sans-serif; }
+                        .report-header { text-align: center; margin-bottom: 2rem; }
+                        .report-header h1 { margin: 0; }
+                        .report-header p { margin: 5px 0; color: #555; }
+                        .section { margin-bottom: 2rem; border: 1px solid #ccc; padding: 1rem; border-radius: 8px; }
+                        .section h2 { margin-top: 0; border-bottom: 2px solid #333; padding-bottom: 0.5rem; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+                        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                        th { background-color: #f2f2f2; }
+                    </style>
+                </head>
+                <body>
+                    <div class="report-header">
+                        <h1>Daily PR Commission Report</h1>
+                        <p><strong>${appState.companyProfile.name}</strong></p>
+                        <p>Date: <strong>${date}</strong></p>
+                    </div>
+
+                    <div class="section">
+                        <h2>Agent Commissions</h2>
+                        <table>
+                            <thead><tr><th>Agent Name</th><th>Orders</th><th>Revenue</th><th>Commission (10%)</th></tr></thead>
+                            <tbody>
+                                ${daily.map(c => `
+                                    <tr><td>${c.name}</td><td>${c.orders}</td><td>${formatCurrency(c.revenue)}</td><td>${formatCurrency(c.commission)}</td></tr>
                                 `).join('')}
                             </tbody>
                         </table>
@@ -5949,34 +6584,168 @@ function updateHeaderDateTime() {
             return content;
         }
 
+        // Store interval ID to prevent memory leaks
+        let headerDateTimeInterval = null;
+
         function renderApp() {
-            const isLoggedIn = appState.currentUser !== null;
-            const appContainer = document.getElementById('app');
+            try {
+                const isLoggedIn = appState.currentUser !== null;
+                const appContainer = document.getElementById('app');
 
-            if (isLoggedIn) {
-                appContainer.innerHTML = `
-                    ${components.Sidebar({ currentUser: appState.currentUser, currentView: appState.currentView, sidebarCollapsed: appState.sidebarCollapsed })}
-                    <div class="main-container ${appState.sidebarCollapsed ? 'sidebar-collapsed' : ''}">
-                        ${components.Header({ currentUser: appState.currentUser, companyProfile: appState.companyProfile, sidebarCollapsed: appState.sidebarCollapsed })}
-                        <div class="main-content">
-                            ${renderOrderDetailsModal()}
-                            ${renderMainContent()}
+                if (isLoggedIn) {
+                    appContainer.innerHTML = `
+                        ${components.Sidebar({ currentUser: appState.currentUser, currentView: appState.currentView, sidebarCollapsed: appState.sidebarCollapsed })}
+                        <div class="main-container ${appState.sidebarCollapsed ? 'sidebar-collapsed' : ''}">
+                            ${components.Header({ currentUser: appState.currentUser, companyProfile: appState.companyProfile, sidebarCollapsed: appState.sidebarCollapsed })}
+                            <div class="main-content">
+                                ${renderOrderDetailsModal()}
+                                ${renderMainContent()}
+                            </div>
                         </div>
-                    </div>
-                `;
-            } else {
-                appContainer.innerHTML = renderMainContent();
-            }
+                    `;
+                } else {
+                    appContainer.innerHTML = renderMainContent();
+                }
 
-            // Save draft if user is on billing page and navigates away
-            if (appState.currentView !== 'billing' && appState.billingData.patientName) saveDraft();
-            if (isLoggedIn) {
-                updateHeaderDateTime();
-                setInterval(updateHeaderDateTime, 1000);
-            }
+                // Save draft if user is on billing page and navigates away
+                if (appState.currentView !== 'billing' && appState.billingData.patientName) saveDraft();
+                
+                if (isLoggedIn) {
+                    updateHeaderDateTime();
+                    // Clear old interval before creating new one
+                    if (headerDateTimeInterval !== null) {
+                        clearInterval(headerDateTimeInterval);
+                    }
+                    headerDateTimeInterval = setInterval(updateHeaderDateTime, 1000);
+                }
 
-            // Always re-attach event listeners after a render
-            attachEventListeners();
+                // Always re-attach event listeners after a render
+                // This needs to be called AFTER the DOM is updated by innerHTML
+                attachEventListeners();
+
+                // Special case for inventory page autocomplete
+                if (appState.currentView === 'inventory') {
+                    attachInventorySearchAutocomplete();
+                }
+            } catch (error) {
+                console.error('renderApp error:', error);
+                setTimeout(() => {
+                    showModal('An error occurred. Please refresh the app.', 'error').catch(e => console.error(e));
+                }, 100);
+            }
+        }
+
+        // Safe modal system to replace alert/confirm - non-blocking
+        function showModal(message, type = 'info') {
+            return new Promise((resolve) => {
+                try {
+                    const modal = document.createElement('div');
+                    modal.style.cssText = `
+                        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+                        background: rgba(0,0,0,0.5); z-index: 9999;
+                        display: flex; align-items: center; justify-content: center;
+                        pointer-events: all;
+                    `;
+                    
+                    const colors = {
+                        info: '#0e4a7c',
+                        warning: '#f59e0b',
+                        error: '#ef4444',
+                        success: '#10b981'
+                    };
+                    
+                    const color = colors[type] || colors.info;
+                    
+                    modal.innerHTML = `
+                        <div style="background: var(--surface); border-radius: 0.5rem; padding: 2rem; max-width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); color: var(--text-primary);">
+                            <p style="margin: 0 0 1.5rem 0; font-size: 1rem; line-height: 1.5;">${String(message).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
+                            <button onclick="this.closest('[data-silhouette-modal]').remove()" style="background: ${color}; color: white; border: none; padding: 0.5rem 1.5rem; border-radius: 0.25rem; cursor: pointer; font-weight: 600; width: 100%;" data-modal-close>OK</button>
+                        </div>
+                    `;
+                    modal.dataset.silhouetteModal = 'true';
+                    document.body.appendChild(modal);
+                    
+                    const btn = modal.querySelector('[data-modal-close]');
+                    if (btn) {
+                        btn.addEventListener('click', () => {
+                            modal.remove();
+                            resolve();
+                        });
+                    }
+                } catch (e) {
+                    console.error('showModal error:', e);
+                    resolve();
+                }
+            });
+        }
+
+        // Small non-blocking toast for status messages
+        function showToast(message, type = 'info', duration = 1200) {
+            try {
+                const colors = { info: '#0e4a7c', warning: '#f59e0b', error: '#ef4444', success: '#10b981' };
+                const color = colors[type] || colors.info;
+                const toast = document.createElement('div');
+                toast.style.cssText = `position: fixed; right: 20px; bottom: 20px; background: ${color}; color: white; padding: 0.6rem 1rem; border-radius: 6px; z-index: 10000; box-shadow: 0 6px 18px rgba(0,0,0,0.15); font-weight: 600;`;
+                toast.textContent = String(message).slice(0, 200);
+                document.body.appendChild(toast);
+                setTimeout(() => { try { toast.remove(); } catch(e){} }, duration);
+            } catch (e) { console.error('showToast error:', e); }
+        }
+
+        function showConfirm(message) {
+            return new Promise((resolve) => {
+                try {
+                    const modal = document.createElement('div');
+                    modal.style.cssText = `
+                        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+                        background: rgba(0,0,0,0.5); z-index: 9999;
+                        display: flex; align-items: center; justify-content: center;
+                        pointer-events: all;
+                    `;
+                    
+                    modal.innerHTML = `
+                        <div style="background: var(--surface); border-radius: 0.5rem; padding: 2rem; max-width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); color: var(--text-primary);">
+                            <p style="margin: 0 0 1.5rem 0; font-size: 1rem; line-height: 1.5;">${String(message).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
+                            <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                                <button data-modal-cancel style="background: var(--border); color: var(--text-primary); border: none; padding: 0.5rem 1.5rem; border-radius: 0.25rem; cursor: pointer; font-weight: 600;">Cancel</button>
+                                <button data-modal-confirm style="background: var(--primary); color: white; border: none; padding: 0.5rem 1.5rem; border-radius: 0.25rem; cursor: pointer; font-weight: 600;">Confirm</button>
+                            </div>
+                        </div>
+                    `;
+                    modal.dataset.silhouetteModal = 'true';
+                    document.body.appendChild(modal);
+                    
+                    const confirmBtn = modal.querySelector('[data-modal-confirm]');
+                    const cancelBtn = modal.querySelector('[data-modal-cancel]');
+                    
+                    if (confirmBtn) {
+                        // Prevent propagation and add a mousedown blocker to avoid click bleed-through
+                        confirmBtn.addEventListener('mousedown', (ev) => { ev.stopPropagation(); ev.preventDefault(); }, { passive: false });
+                        confirmBtn.addEventListener('click', (ev) => {
+                            ev.preventDefault(); ev.stopPropagation(); try { document.activeElement && document.activeElement.blur(); } catch(e) {}
+                            // Delay removal/resolution more conservatively to avoid click bleed-through
+                            setTimeout(() => {
+                                try { modal.remove(); } catch(e) {}
+                                resolve(true);
+                            }, 300);
+                        });
+                    }
+                    
+                    if (cancelBtn) {
+                        cancelBtn.addEventListener('mousedown', (ev) => { ev.stopPropagation(); ev.preventDefault(); }, { passive: false });
+                        cancelBtn.addEventListener('click', (ev) => {
+                            ev.preventDefault(); ev.stopPropagation();
+                            setTimeout(() => {
+                                try { modal.remove(); } catch(e) {}
+                                resolve(false);
+                            }, 300);
+                        });
+                    }
+                } catch (e) {
+                    console.error('showConfirm error:', e);
+                    resolve(false);
+                }
+            });
         }
 
         window.addEventListener('DOMContentLoaded', async () => {
@@ -5996,6 +6765,44 @@ function updateHeaderDateTime() {
                     saveData();
                 }
             });
+
+            // If the app regains focus (e.g., user restores/minimizes), attempt to recover UI
+            window.addEventListener('focus', () => {
+                try {
+                    console.info('Window focused - running recoverUI');
+                    recoverUI();
+                } catch(e) { console.error(e); }
+            });
+
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') {
+                    try {
+                        console.info('Visibility changed to visible - running recoverUI');
+                        recoverUI();
+                    } catch(e) { console.error(e); }
+                }
+            });
+
+            // Monitor DOM for suspicious large-scale disabling of inputs and auto-recover
+            try {
+                const observer = new MutationObserver(mutations => {
+                    let disabledCount = 0;
+                    mutations.forEach(m => {
+                        if (m.type === 'attributes' && (m.attributeName === 'disabled' || m.attributeName === 'style')) {
+                            const target = m.target;
+                            if (target && (target.disabled === true || (window.getComputedStyle(target).pointerEvents === 'none'))) {
+                                // increment if many elements are disabled
+                                disabledCount++;
+                            }
+                        }
+                    });
+                    if (disabledCount > 5) {
+                        console.warn('MutationObserver detected multiple disabled elements, running recoverUI');
+                        try { recoverUI(); clearAllEventListeners(); renderApp(); } catch(e) { console.error(e); }
+                    }
+                });
+                observer.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['disabled', 'style'] });
+            } catch(e) { console.error('Observer init failed:', e); }
         });
     </script>
 </body>
