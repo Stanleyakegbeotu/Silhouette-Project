@@ -979,6 +979,9 @@
             historyPage: 0
         };
 
+        // Selected month for hospital performance (type: Date). Defaults to current month.
+        appState.hospitalPerformanceMonth = new Date();
+
         // Users - Initially empty; to be managed by admin in production
         let users = [];
 
@@ -1687,7 +1690,7 @@ async function loadData() {
         // Ensure billing data has required fields and sensible defaults (used when loading drafts)
         function ensureBillingDataShape(data) {
             const defaults = {
-                patientName: '', pid: '', contact: '', referredBy: '', staffName: appState.currentUser ? appState.currentUser.fullName : '',
+                patientName: '', pid: '', contact: '', referredBy: '', referringHospital: '', staffName: appState.currentUser ? appState.currentUser.fullName : '',
                 selectedServices: [], discount: 0, total: 0, paymentMethod: 'cash', amountPaid: 0, balance: 0, paymentStatus: 'full',
                 splitPayments: { cash: 0, pos: 0, transfer: 0 }
             };
@@ -2341,8 +2344,10 @@ async function loadData() {
                     </div>
                 `,
                 handleLogin: async function() {
-                    const username = document.getElementById('loginUsername').value.trim();
-                    const password = document.getElementById('loginPassword').value;
+                    const usernameEl = document.getElementById('loginUsername');
+                    const passwordEl = document.getElementById('loginPassword');
+                    const username = (usernameEl && usernameEl.value || '').trim().toLowerCase();
+                    const password = (passwordEl && passwordEl.value || '').toLowerCase();
                     if (!username || !password) {
                         await showModal('Please enter both username and password', 'warning');
                         // Focus username for user convenience
@@ -2350,10 +2355,10 @@ async function loadData() {
                         if (userInput) userInput.focus();
                         return;
                     }
-                    // Check if user exists in the users array
-                    const user = users.find(u => u.username === username);
-                    if (user && user.password === password) {
-                        appState.currentUser = { username, role: user.role, fullName: user.fullName };
+                    // Case-insensitive check: compare normalized lowercase username/password
+                    const user = users.find(u => (u.username || '').toLowerCase() === username);
+                    if (user && (user.password || '').toLowerCase() === password) {
+                        appState.currentUser = { username: user.username, role: user.role, fullName: user.fullName };
                         logAction('LOGIN', `User '${user.fullName}' logged in.`);
                         appState.currentView = 'dashboard';
                         renderApp();
@@ -2639,6 +2644,10 @@ function updateHeaderDateTime() {
                                         <input type="text" id="referredBySearch" class="form-input" placeholder="Type PR agent name..." value="${appState.billingData.referredBy || ''}" />
                                         <div id="prSuggestions" style="position:absolute; top:100%; left:0; right:0; background:var(--background); border:1px solid var(--border); border-top:none; max-height:200px; overflow-y:auto; z-index:100; display:none; border-radius:0 0 0.25rem 0.25rem;"></div>
                                     </div>
+                                    <div style="margin-top:0.5rem;">
+                                        <label class="form-label" style="font-size:0.85rem; margin-bottom:0.25rem;">Referring Hospital</label>
+                                        <input type="text" id="referringHospital" class="form-input" placeholder="Hospital name (optional)" value="${appState.billingData.referringHospital || ''}" />
+                                    </div>
                                     <div id="addPRAgentContainer" style="margin-top:0.5rem; display:none;">
                                         <button id="addNewPRBtn" class="btn-secondary" style="padding:0.4rem 0.75rem; font-size:0.85rem;">+ Add New PR Agent</button>
                                     </div>
@@ -2686,10 +2695,10 @@ function updateHeaderDateTime() {
 
                             <!-- Search / Autocomplete -->
                             <div style="margin-bottom:1rem; display:flex; gap:0.5rem; align-items:center;">
-                                <input id="serviceSearch" class="form-input" placeholder="Type a test or category name to search..." style="flex:1;" />
+                                <input id="serviceSearch" class="form-input" placeholder="Type a test or category name to search..." style="flex:1;" autocomplete="off" oninput="renderServiceSuggestions(this.value)" onfocus="renderServiceSuggestions(this.value)" onmousedown="renderServiceSuggestions(this.value || '')" />
                                 <button class="btn-primary" onclick="openCategoryList()" title="Browse categories">Browse</button>
                             </div>
-                            <div id="serviceSuggestions" style="margin-bottom:1rem; display:block;"></div>
+                            <div id="serviceSuggestions" role="listbox" aria-expanded="false" style="margin-bottom:1rem; display:none;"></div>
 
                             <!-- Selected Services (compact list is displayed in the preview below) -->
                             <div style="font-size:0.9rem;color:var(--text-secondary); margin-bottom: 0.75rem;">Selected services are shown in the preview panel below.</div>
@@ -2807,6 +2816,10 @@ function updateHeaderDateTime() {
                                         <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
                                             <span><strong>PID:</strong></span>
                                             <span id="receiptPID">${appState.billingData.pid}</span>
+                                        </div>
+                                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                                            <span><strong>Referring Hospital:</strong></span>
+                                            <span id="receiptHospital">${appState.billingData.referringHospital || 'N/A'}</span>
                                         </div>
                                         <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
                                             <span><strong>Staff:</strong></span>
@@ -3028,24 +3041,50 @@ function updateHeaderDateTime() {
                                     <input type="tel" id="newPRPhone" class="form-input" placeholder="e.g., 0803 123 4567">
                                 </div>
                             </div>
+                            <div class="form-group">
+                                <label class="form-label">Hospital (Optional)</label>
+                                <input type="text" id="newPRHospital" class="form-input" placeholder="e.g., St. Mary's Hospital">
+                            </div>
                             <button onclick="addNewPR()" class="btn-primary" style="margin-top: 1rem;">&#10003; Save Professional</button>
                         </div>
                     ` : ''}
 
                     <div class="card">
                         <!-- Search Bar -->
-                        <div class="form-group" style="margin-bottom: 2rem; position: relative;">
-                            <label class="form-label">Search by PR Name or Phone</label>
-                            <input type="text" id="prSearch" class="form-input" placeholder="Type to search..." value="${appState.recordFilters.prManagementSearchQuery}" oninput="appState.recordFilters.prManagementSearchQuery = this.value; renderPRManagementSuggestions(this.value);" autocomplete="off">
-                            <div id="prManagementSuggestions" class="autocomplete-box"></div>
+                        <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; margin-bottom:0.5rem;">
+                            <div style="flex:1;">
+                                <div class="form-group" style="margin-bottom: 0; position: relative;">
+                                    <label class="form-label">Search by PR Name or Phone</label>
+                                    <input type="text" id="prSearch" class="form-input" placeholder="Type to search..." value="${appState.recordFilters.prManagementSearchQuery}" oninput="appState.recordFilters.prManagementSearchQuery = this.value; renderPRManagementSuggestions(this.value);" autocomplete="off">
+                                    <div id="prManagementSuggestions" class="autocomplete-box"></div>
+                                </div>
+                            </div>
+                            <div style="display:flex; gap:0.5rem; align-items:center;">
+                                <button class="btn-secondary" onclick="toggleHospitalsPanel()">Hospitals</button>
+                            </div>
                         </div>
 
+                        ${appState.showHospitalsPanel ? `
+                            <div id="hospitalsPanel" class="card animate-fade-in" style="margin-bottom: 1rem;">
+                                ${(() => {
+                                    const groups = getHospitals();
+                                    if (!groups || groups.length === 0) return `<div style="color:var(--text-secondary);">No hospitals assigned yet.</div>`;
+                                    return groups.map(h => `
+                                        <div style="margin-bottom:0.75rem;">
+                                            <div style="font-weight:700; margin-bottom:0.35rem;">${h.hospital}</div>
+                                            <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">${h.prs.map(pr => `<button class="btn-secondary" onclick="selectPRFromHosp(${JSON.stringify(pr.name)})">${pr.name}</button>`).join('')}</div>
+                                        </div>
+                                    `).join('');
+                                })()}
+                            </div>
+                        ` : ''}
 
                         <table class="table">
                             <thead>
                                 <tr>
                                     <th>PR Name</th>
                                     <th>Contact Phone</th>
+                                    <th>Hospital</th>
                                     <th>Total Referrals</th>
                                     <th style="text-align: right;">Actions</th> 
                                 </tr>
@@ -3060,9 +3099,10 @@ function updateHeaderDateTime() {
                                     if (appState.editingPRId === pr.id) {
                                         return `
                                             <tr class="animate-fade-in">
-                                                <td colspan="2"><input type="text" id="editPRName-${pr.id}" value="${pr.name}" class="form-input"></td>
+                                                <td><input type="text" id="editPRName-${pr.id}" value="${pr.name}" class="form-input"></td>
                                                 <td><input type="tel" id="editPRPhone-${pr.id}" value="${pr.phone}" class="form-input"></td>
-                                                <td style="text-align: right; white-space: nowrap; display: flex; gap: 0.5rem; justify-content: flex-end;">
+                                                <td><input type="text" id="editPRHospital-${pr.id}" value="${pr.hospital || ''}" class="form-input"></td>
+                                                <td colspan="2" style="text-align: right; white-space: nowrap; display: flex; gap: 0.5rem; justify-content: flex-end;">
                                                     ${renderActionButtons(`savePREdit(${pr.id})`, `cancelEdit('pr')`)}
                                                 </td>
                                             </tr>
@@ -3073,6 +3113,7 @@ function updateHeaderDateTime() {
                                         <tr id="pr-item-${pr.id}">
                                             <td><strong>${pr.name}</strong></td>
                                             <td>${pr.phone}</td>
+                                            <td>${pr.hospital || '—'}</td>
                                             <td style="font-weight: 700; color: var(--primary);">${referralCount}</td>
                                             <td style="text-align: right; white-space: nowrap; display: flex; gap: 0.5rem; justify-content: flex-end;"> 
                                                 <button onclick="toggleEdit('pr', ${pr.id})" class="btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">&#9998;&#65039; Edit</button>
@@ -3316,6 +3357,49 @@ function updateHeaderDateTime() {
                                 </div>
                             </div>
                         ` : ''}
+                    </div>
+
+                    <!-- Hospital Referral Performance -->
+                    <div class="card animate-slide-up" style="margin-top: 2rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; gap: 1rem;">
+                            <div>
+                                <h3 style="font-weight: 700; font-size: 1.25rem; margin: 0;">Hospital Referral Performance</h3>
+                                <div style="font-size:0.9rem; color:var(--text-secondary);">Showing data for <strong id="hospitalMonthLabel">${formatMonthYearLabel(appState.hospitalPerformanceMonth || new Date())}</strong></div>
+                            </div>
+
+                            <div style="display:flex; align-items:center; gap:0.5rem;">
+                                <button class="btn-secondary" onclick="changeHospitalPerformanceMonth(-1)">&#8592;</button>
+                                <input id="hospitalMonthInput" type="month" value="${(appState.hospitalPerformanceMonth || new Date()).toISOString().slice(0,7)}" onchange="setHospitalPerformanceMonthFromInput(this.value)" style="padding:0.35rem; border-radius:0.25rem; border:1px solid var(--border); background:var(--surface);">
+                                <button class="btn-secondary" onclick="changeHospitalPerformanceMonth(1)">&#8594;</button>
+                            </div>
+                        </div>
+
+                        <div style="margin-top:1rem; display:flex; gap:0.5rem; align-items:center;">
+                            <button class="btn-secondary" onclick="exportHospitalMonthlyCSV()">Export CSV</button>
+                            <button class="btn-secondary" onclick="printHospitalMonthlyReport()">Print</button>
+                        </div>
+
+                        <div class="responsive-table-wrapper" style="margin-top:1rem;">
+                            <div style="max-height:420px; overflow-y:auto; padding-right:8px;">
+                                <table class="table">
+                                    <thead><tr><th style="width:40px;"></th><th>Hospital</th><th style="text-align:right;">Total Revenue</th></tr></thead>
+                                    <tbody>
+                                        ${(() => {
+                                            const data = getHospitalMonthlyPerformance(appState.hospitalPerformanceMonth || new Date());
+                                            if (data.length === 0) return `<tr><td colspan="3" style="text-align:center;color:var(--text-secondary);padding:1rem;">No hospital referrals for this period.</td></tr>`;
+                                            return data.map(h => `
+                                                <tr>
+                                                    <td style="padding-left:0.25rem;"><button aria-label="Toggle details for ${h.hospital}" style="background:none;border:none;cursor:pointer;font-size:1rem;line-height:1;" onclick="toggleHospitalDetails(${JSON.stringify(h.hospital)})">${appState.showHospitalDetails && appState.showHospitalDetails[h.hospital] ? '▾' : '▸'}</button></td>
+                                                    <td><strong>${h.hospital}</strong></td>
+                                                    <td style="text-align:right; font-weight:700;">${formatCurrency(h.totalRevenue)}</td>
+                                                </tr>
+                                                ${appState.showHospitalDetails && appState.showHospitalDetails[h.hospital] ? `<tr><td colspan="3"><div style="padding:0.25rem 0.75rem 0.75rem 0.75rem;"><table class="table"><thead><tr><th>PR Agent</th><th>Referrals</th><th style="text-align:right;">Total Revenue</th></tr></thead><tbody>${h.prs.map(pr => `<tr><td>${pr.name}</td><td>${pr.orders}</td><td style="text-align:right;">${formatCurrency(pr.revenue)}</td></tr>`).join('')}</tbody></table></div></td></tr>` : ''}
+                                            `).join('');
+                                        })()}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Daily Top Tests -->
@@ -4365,6 +4449,32 @@ function updateHeaderDateTime() {
                     });
                 }
 
+                // Also wire the referring hospital input so changes are reflected in appState immediately
+                const referringHospitalInput = document.getElementById('referringHospital');
+                if (referringHospitalInput) {
+                    referringHospitalInput.addEventListener('input', function() { appState.billingData.referringHospital = this.value; });
+                    referringHospitalInput.addEventListener('focus', function() { /* no-op, kept for parity */ });
+
+                    // When the user leaves the hospital input, if a PR agent is selected and the agent has no assigned hospital,
+                    // offer to assign the entered hospital to the PR without clearing other billing inputs.
+                    referringHospitalInput.addEventListener('blur', async function() {
+                        const hospital = this.value ? this.value.trim() : '';
+                        appState.billingData.referringHospital = hospital;
+                        const prName = appState.billingData.referredBy && appState.billingData.referredBy.trim() ? appState.billingData.referredBy.trim() : '';
+                        if (!prName || !hospital) return;
+                        const pr = prList.find(p => p.name === prName);
+                        if (!pr) return;
+                        if (!pr.hospital) {
+                            const confirmAssign = await showConfirm(`No hospital is assigned to PR '${prName}'. Assign '${hospital}' to this PR agent?`);
+                            if (confirmAssign) {
+                                pr.hospital = hospital;
+                                logAction('ASSIGN_PR_HOSPITAL', `Assigned PR '${prName}' to hospital '${hospital}' via billing form.`);
+                                await showModal(`Assigned hospital '${hospital}' to PR '${prName}'.`, 'success');
+                            }
+                        }
+                    });
+                }
+
                 // PR suggestions click handler (delegated)
                 const prSuggestionsDiv = document.getElementById('prSuggestions');
                 if (prSuggestionsDiv) {
@@ -4375,6 +4485,73 @@ function updateHeaderDateTime() {
                         const phone = item.dataset.phone;
                         selectPRAgent(name, phone);
                     });
+                }
+
+                // Login/setup inputs: force lowercase on input and pasted text for username/password
+                // This improves UX by showing the conversion live and prevents case mismatches during auth
+                const loginU = document.getElementById('loginUsername');
+                const loginP = document.getElementById('loginPassword');
+                const setupU = document.getElementById('setupUsername');
+                const setupP = document.getElementById('setupPassword');
+                const setupPC = document.getElementById('setupPasswordConfirm');
+
+                function attachLowercaseHandler(el) {
+                    if (!el) return;
+                    // live-lowercase while preserving caret position
+                    el.addEventListener('input', function () {
+                        const pos = this.selectionStart;
+                        this.value = (this.value || '').toLowerCase();
+                        try { this.setSelectionRange(pos, pos); } catch (e) { /* ignore */ }
+                    });
+                    // paste: insert lowercased paste content
+                    el.addEventListener('paste', function (e) {
+                        e.preventDefault();
+                        const pasted = (e.clipboardData || window.clipboardData).getData('text') || '';
+                        const lower = pasted.toLowerCase();
+                        const start = this.selectionStart || 0;
+                        const end = this.selectionEnd || 0;
+                        const val = this.value || '';
+                        this.value = val.slice(0, start) + lower + val.slice(end);
+                        const pos = start + lower.length;
+                        try { this.setSelectionRange(pos, pos); } catch (e) { /* ignore */ }
+                    });
+                }
+
+                attachLowercaseHandler(loginU);
+                attachLowercaseHandler(loginP);
+                attachLowercaseHandler(setupU);
+                attachLowercaseHandler(setupP);
+                attachLowercaseHandler(setupPC);
+
+                // Service search input - attach handlers here so they persist across re-renders
+                const svcInput = document.getElementById('serviceSearch');
+                if (svcInput) {
+                    svcInput.oninput = function() { renderServiceSuggestions(this.value); };
+                    svcInput.addEventListener('focus', function() { renderServiceSuggestions(this.value); });
+                    svcInput.addEventListener('mousedown', function() { renderServiceSuggestions(this.value || ''); });
+                    svcInput.addEventListener('blur', function() { setTimeout(() => { const box = document.getElementById('serviceSuggestions'); if (box) { box.style.display = 'none'; box.setAttribute('aria-expanded','false'); } }, 200); });
+                    svcInput.addEventListener('keydown', function(e) {
+                        const items = Array.from(document.querySelectorAll('#serviceSuggestions .suggestion-item'));
+                        if (e.key === 'ArrowDown') { e.preventDefault(); if (items.length > 0) items[0].focus(); }
+                        else if (e.key === 'ArrowUp') { e.preventDefault(); if (items.length > 0) items[items.length - 1].focus(); }
+                        else if (e.key === 'Escape') { const box = document.getElementById('serviceSuggestions'); if (box) box.style.display = 'none'; }
+                        else if (e.key === 'Enter') {
+                            const focused = document.activeElement && document.activeElement.closest && document.activeElement.closest('.suggestion-item');
+                            if (focused) { focused.click(); e.preventDefault(); }
+                            else { const first = document.querySelector('#serviceSuggestions .suggestion-item'); if (first) { first.click(); e.preventDefault(); } }
+                        }
+                    });
+
+                    // suggestion click handler is set elsewhere (delegated), ensure suggestion box is keyboard-friendly
+                    const svcBox = document.getElementById('serviceSuggestions');
+                    if (svcBox) {
+                        svcBox.addEventListener('keydown', function(e) {
+                            if (e.key === 'Enter') {
+                                const focused = document.activeElement && document.activeElement.closest && document.activeElement.closest('.suggestion-item');
+                                if (focused) { focused.click(); e.preventDefault(); }
+                            }
+                        });
+                    }
                 }
 
                 // Add new PR agent button
@@ -4557,36 +4734,194 @@ function updateHeaderDateTime() {
                     if (!invBox.contains(e.target) && !invInput.contains(e.target)) {
                         invBox.style.display = 'none';
                     }
+
+                    // Hide service suggestions when clicking outside
+                    const svcBox = document.getElementById('serviceSuggestions');
+                    const svcInput = document.getElementById('serviceSearch');
+                    if (svcBox && svcInput && !svcBox.contains(e.target) && !svcInput.contains(e.target)) {
+                        svcBox.style.display = 'none'; svcBox.setAttribute('aria-expanded','false');
+                    }
+
+                    // DOCUMENT-LEVEL FALLBACK: handle direct pointer clicks on suggestion items even if container handlers are missing
+                    const svcItem = e.target.closest && e.target.closest('.suggestion-item');
+                    if (svcItem && svcBox && svcBox.contains(svcItem)) {
+                        // If it's a service suggestion with a data-id, add immediately
+                        const id = svcItem.getAttribute && svcItem.getAttribute('data-id');
+                        const cat = svcItem.getAttribute && svcItem.getAttribute('data-category');
+                        if (id) {
+                            try { addServiceById(id); } catch (err) { console.error('Fallback addServiceById error:', err); }
+                            svcBox.style.display = 'none'; svcBox.setAttribute('aria-expanded','false');
+                            const input = document.getElementById('serviceSearch'); if (input) { input.value = ''; input.focus(); }
+                        } else if (cat) {
+                            // expand category view
+                            renderServiceSuggestions(cat, { expandCategory: true });
+                        }
+                    }
+
+                    // Ensure we also catch pointerdown before blur hides the suggestions (attach once)
+                    if (!window._svcPointerDownAttached) {
+                        window._svcPointerDownAttached = true;
+                        document.addEventListener('pointerdown', function(ev) {
+                            const box = document.getElementById('serviceSuggestions');
+                            const item = ev.target && ev.target.closest && ev.target.closest('.suggestion-item');
+                            if (!item || !box || !box.contains(item)) return;
+                            // If it's a suggestion item, handle selection immediately and prevent input blur race
+                            ev.preventDefault(); ev.stopPropagation();
+                            const id = item.getAttribute && item.getAttribute('data-id');
+                            const cat = item.getAttribute && item.getAttribute('data-category');
+                            if (id) {
+                                try { addServiceById(id); } catch (err) { console.error('Pointerdown addServiceById error:', err); }
+                                box.style.display = 'none'; box.setAttribute('aria-expanded','false');
+                                const input = document.getElementById('serviceSearch'); if (input) { input.value = ''; input.focus(); }
+                            } else if (cat) {
+                                renderServiceSuggestions(cat, { expandCategory: true });
+                            }
+                        }, { passive: false });
+                    }
                 });
 
                 // Service search input
                 const searchInput = document.getElementById('serviceSearch');
                 if (searchInput) {
+                    // Show suggestions on focus, input and when clicked (mousedown)
                     searchInput.addEventListener('input', function() {
                         renderServiceSuggestions(this.value);
                     });
+                    searchInput.addEventListener('focus', function() {
+                        renderServiceSuggestions(this.value);
+                    });
+                    // Show immediately on mousedown (covers click-before-focus scenarios)
+                    searchInput.addEventListener('mousedown', function(e) {
+                        renderServiceSuggestions(this.value || '');
+                    });
+                    searchInput.addEventListener('blur', function() {
+                        // Small delay to allow click selection
+                        setTimeout(() => { const box = document.getElementById('serviceSuggestions'); if (box) { box.style.display = 'none'; box.setAttribute('aria-expanded','false'); } }, 200);
+                    });
+
+                    // Keyboard navigation: ArrowDown/ArrowUp to focus suggestions, Escape to close
                     searchInput.addEventListener('keydown', function(e) {
-                        if (e.key === 'Enter') {
+                        const items = document.querySelectorAll('#serviceSuggestions .suggestion-item');
+                        if (e.key === 'ArrowDown') {
                             e.preventDefault();
-                            // If there's a first suggestion, pick it
-                            const first = document.querySelector('#serviceSuggestions .suggestion-item');
-                            if (first) first.click();
+                            if (items.length > 0) items[0].focus();
+                        } else if (e.key === 'ArrowUp') {
+                            e.preventDefault();
+                            if (items.length > 0) items[items.length - 1].focus();
+                        } else if (e.key === 'Escape') {
+                            const box = document.getElementById('serviceSuggestions'); if (box) box.style.display = 'none';
+                        } else if (e.key === 'Enter') {
+                            // If there's a focused suggestion, trigger it; otherwise pick first
+                            const focused = document.activeElement && document.activeElement.closest && document.activeElement.closest('.suggestion-item');
+                            if (focused) { focused.click(); e.preventDefault(); }
+                            else {
+                                const first = document.querySelector('#serviceSuggestions .suggestion-item');
+                                if (first) { first.click(); e.preventDefault(); }
+                            }
                         }
                     });
+
+                    // Allow Enter on focused suggestion items
+                    const svcBox = document.getElementById('serviceSuggestions');
+                    if (svcBox) {
+                        svcBox.addEventListener('keydown', function(e) {
+                            if (e.key === 'Enter') {
+                                const focused = document.activeElement && document.activeElement.closest && document.activeElement.closest('.suggestion-item');
+                                if (focused) { focused.click(); e.preventDefault(); }
+                            }
+                        });
+                    }
                 }
 
-                // Suggestion click handler (delegated)
-                document.getElementById('serviceSuggestions')?.addEventListener('click', function(e) {
-                    const btn = e.target.closest('.suggestion-item');
-                    if (!btn) return;
-                    const id = btn.dataset.id;
-                    if (id) addServiceById(id);
-                    else {
-                        // category click: expand category list
-                        const cat = btn.dataset.category;
-                        renderServiceSuggestions(cat, {expandCategory: true});
+                // Suggestion click handler (delegated) - ensures service is added on click
+                const suggestionsContainer = document.getElementById('serviceSuggestions');
+                if (suggestionsContainer) {
+                    // Remove any previous listeners
+                    suggestionsContainer.replaceWith(suggestionsContainer.cloneNode(true));
+                    const freshContainer = document.getElementById('serviceSuggestions');
+                    
+                    freshContainer.addEventListener('click', function(e) {
+                        const btn = e.target.closest('.suggestion-item');
+                        if (!btn) return;
+
+                        // Debug logging to help trace click selection
+                        console.debug('serviceSuggestions click target:', btn, 'text:', btn.textContent);
+
+                        e.stopPropagation();
+                        e.preventDefault();
+
+                        const id = btn.getAttribute('data-id');
+                        const cat = btn.getAttribute('data-category');
+                        console.debug('suggestion clicked id:', id, 'category:', cat);
+
+                        if (id) {
+                            // Add service immediately
+                            try {
+                                addServiceById(id);
+                                console.debug('addServiceById invoked for id:', id);
+                            } catch (err) {
+                                console.error('Error calling addServiceById:', err);
+                            }
+
+                            // Close the dropdown
+                            const suggestionsBox = document.getElementById('serviceSuggestions');
+                            if (suggestionsBox) {
+                                suggestionsBox.style.display = 'none';
+                                suggestionsBox.setAttribute('aria-expanded', 'false');
+                            }
+
+                            // Clear input and refocus
+                            const input = document.getElementById('serviceSearch');
+                            if (input) {
+                                input.value = '';
+                                input.focus();
+                            }
+                        } else if (cat) {
+                            // category click: expand category list
+                            renderServiceSuggestions(cat, {expandCategory: true});
+                        }
+                    });
+
+                    // Immediate selection on pointerdown (handles blur-before-click cases)
+                    freshContainer.addEventListener('pointerdown', function(e) {
+                        const btn = e.target.closest('.suggestion-item');
+                        if (!btn) return;
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const id = btn.getAttribute('data-id');
+                        const cat = btn.getAttribute('data-category');
+                        if (id) {
+                            try { addServiceById(id); } catch (err) { console.error('Error calling addServiceById (pointerdown):', err); }
+                            const suggestionsBox = document.getElementById('serviceSuggestions');
+                            if (suggestionsBox) { suggestionsBox.style.display = 'none'; suggestionsBox.setAttribute('aria-expanded', 'false'); }
+                            const input = document.getElementById('serviceSearch');
+                            if (input) { input.value = ''; input.focus(); }
+                        } else if (cat) {
+                            renderServiceSuggestions(cat, {expandCategory: true});
+                        }
+                    });
+
+                    // Ensure pointerdown handler is attached early (so the very first click selects suggestions reliably)
+                    if (!window._svcPointerDownAttached) {
+                        window._svcPointerDownAttached = true;
+                        document.addEventListener('pointerdown', function(ev) {
+                            const box = document.getElementById('serviceSuggestions');
+                            const item = ev.target && ev.target.closest && ev.target.closest('.suggestion-item');
+                            if (!item || !box || !box.contains(item)) return;
+                            // If it's a suggestion item, handle selection immediately and prevent input blur race
+                            ev.preventDefault(); ev.stopPropagation();
+                            const id = item.getAttribute && item.getAttribute('data-id');
+                            const cat = item.getAttribute && item.getAttribute('data-category');
+                            if (id) {
+                                try { addServiceById(id); } catch (err) { console.error('Pointerdown addServiceById error:', err); }
+                                box.style.display = 'none'; box.setAttribute('aria-expanded','false');
+                                const input = document.getElementById('serviceSearch'); if (input) { input.value = ''; input.focus(); }
+                            } else if (cat) {
+                                renderServiceSuggestions(cat, { expandCategory: true });
+                            }
+                        }, { passive: false });
                     }
-                });
+                }
 
                 // Selected services remove (delegated)
                 document.getElementById('selectedServicesList')?.addEventListener('click', function(e) {
@@ -4656,6 +4991,41 @@ function updateHeaderDateTime() {
             const input = document.getElementById('referredBySearch');
             if (input) input.value = name;
             appState.billingData.referredBy = name;
+
+            // Capture hospital input if provided and assign it to the PR
+            const hospInput = document.getElementById('referringHospital');
+            const hospital = hospInput && hospInput.value ? hospInput.value.trim() : '';
+
+            let pr = prList.find(p => p.name === name);
+            if (pr) {
+                if (hospital) {
+                    // User provided a hospital on the billing form: use it and assign to PR
+                    pr.hospital = hospital;
+                    appState.billingData.referringHospital = hospital;
+                } else if (pr.hospital) {
+                    // Autofill the hospital field from the PR's assigned hospital
+                    if (hospInput) hospInput.value = pr.hospital;
+                    appState.billingData.referringHospital = pr.hospital;
+                    logAction('AUTO_FILL_PR_HOSPITAL', `Auto-filled hospital for PR '${name}' to '${pr.hospital}'.`);
+                } else {
+                    // No hospital assigned to this PR: focus hospital input so user can assign directly
+                    if (hospInput) {
+                        try { hospInput.focus(); } catch (e) {}
+                        showToast('No hospital assigned to this agent — type a hospital name to assign it.', 'info', 2400);
+                    }
+                }
+            } else {
+                // No existing PR found: if the billing form had a hospital, use it; otherwise new PR will be unassigned
+                if (hospital) {
+                    appState.billingData.referringHospital = hospital;
+                }
+                const newId = prList.length > 0 ? Math.max(...prList.map(p => p.id)) + 1 : 1;
+                prList.push({ id: newId, name: name, phone: phone || 'N/A', hospital: hospital });
+                logAction('CREATE_PR', `Added new PR: '${name}' (auto-created from billing) and assigned to hospital '${hospital || 'Unassigned'}'.`);
+            }
+
+            if (hospital) logAction('ASSIGN_PR_HOSPITAL', `Assigned PR '${name}' to hospital '${hospital}'.`);
+
             document.getElementById('prSuggestions').style.display = 'none';
             document.getElementById('addPRAgentContainer').style.display = 'none';
         }
@@ -4706,6 +5076,200 @@ function updateHeaderDateTime() {
                     setTimeout(() => { row.style.background = prevBg; }, 2000);
                 }
             }, 120);
+        }
+
+        // Toggle Hospitals panel in PR Management
+        function toggleHospitalsPanel() {
+            appState.showHospitalsPanel = !appState.showHospitalsPanel;
+            renderApp();
+        }
+
+        // Return hospitals grouped with PRs
+        function getHospitals() {
+            const map = {};
+            prList.forEach(pr => {
+                const h = pr.hospital && pr.hospital.trim() ? pr.hospital.trim() : 'Unassigned';
+                if (!map[h]) map[h] = [];
+                map[h].push(pr);
+            });
+            return Object.keys(map).sort().map(h => ({ hospital: h, prs: map[h] }));
+        }
+
+        // Select PR by name from the Hospitals panel
+        function selectPRFromHosp(name) {
+            const pr = prList.find(p => p.name === name);
+            if (pr) {
+                selectPRManagementById(pr.id, pr.name);
+            } else {
+                const input = document.getElementById('prSearch');
+                if (input) { input.value = name; appState.recordFilters.prManagementSearchQuery = name; renderPRManagementSuggestions(name); }
+            }
+        }
+
+        // Toggle hospital details in analytics
+        function toggleHospitalDetails(hospital) {
+            appState.showHospitalDetails = appState.showHospitalDetails || {};
+            appState.showHospitalDetails[hospital] = !appState.showHospitalDetails[hospital];
+            renderApp();
+        }
+
+        // Compute hospital performance for the analytics date range
+        function getHospitalPerformance() {
+            const { start, end } = appState.analyticsDateRange;
+            const startDate = new Date(start);
+            const endDate = new Date(end);
+
+            const map = {};
+            orders.filter(o => {
+                const d = new Date(o.date);
+                return d >= startDate && d <= endDate;
+            }).forEach(o => {
+                const h = (o.referredHospital && o.referredHospital.trim()) || 'Unassigned';
+                if (!map[h]) map[h] = { totalRevenue: 0, orders: 0, prs: {} };
+                map[h].totalRevenue += o.total || 0;
+                map[h].orders += 1;
+                const pr = o.referredBy || 'Unknown';
+                if (!map[h].prs[pr]) map[h].prs[pr] = { revenue: 0, orders: 0 };
+                map[h].prs[pr].revenue += o.total || 0;
+                map[h].prs[pr].orders += 1;
+            });
+
+            return Object.keys(map).map(h => ({
+                hospital: h,
+                totalRevenue: map[h].totalRevenue,
+                orders: map[h].orders,
+                prs: Object.keys(map[h].prs).map(name => ({ name, revenue: map[h].prs[name].revenue, orders: map[h].prs[name].orders }))
+            })).sort((a, b) => b.totalRevenue - a.totalRevenue);
+        }
+
+        function formatMonthYearLabel(d) {
+            const date = d ? new Date(d) : new Date();
+            const opts = { year: 'numeric', month: 'long' };
+            return date.toLocaleDateString(undefined, opts);
+        }
+
+        function changeHospitalPerformanceMonth(delta) {
+            const d = appState.hospitalPerformanceMonth ? new Date(appState.hospitalPerformanceMonth) : new Date();
+            d.setMonth(d.getMonth() + delta);
+            appState.hospitalPerformanceMonth = d;
+            renderApp();
+        }
+
+        function setHospitalPerformanceMonthFromInput(value) {
+            if (!value) return;
+            const d = new Date(value + '-01');
+            if (isNaN(d.getTime())) return;
+            appState.hospitalPerformanceMonth = d;
+            renderApp();
+        }
+
+        // Export hospital monthly report as CSV
+        function exportHospitalMonthlyCSV() {
+            const data = getHospitalMonthlyPerformance(appState.hospitalPerformanceMonth || new Date());
+            const monthLabel = formatMonthYearLabel(appState.hospitalPerformanceMonth || new Date());
+            const rows = [];
+            rows.push(['Report', 'Hospital Monthly Report']);
+            rows.push(['Month', monthLabel]);
+            rows.push([]);
+            rows.push(['Hospital', 'Hospital Total Revenue', 'PR Agent', 'PR Referrals', 'PR Revenue']);
+
+            data.forEach(h => {
+                // Hospital summary row
+                rows.push([h.hospital, h.totalRevenue.toFixed(2), '', '', '']);
+                // PR detail rows
+                if (h.prs && h.prs.length > 0) {
+                    h.prs.forEach(pr => {
+                        rows.push(['', '', pr.name, pr.orders, pr.revenue.toFixed(2)]);
+                    });
+                }
+            });
+
+            const csv = rows.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(',')).join('\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `hospital-report-${(appState.hospitalPerformanceMonth || new Date()).toISOString().slice(0,7)}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => { try { URL.revokeObjectURL(url); a.remove(); } catch (e) {} }, 5000);
+        }
+
+        // Print a simplified hospital monthly report
+        function printHospitalMonthlyReport() {
+            const data = getHospitalMonthlyPerformance(appState.hospitalPerformanceMonth || new Date());
+            const monthLabel = formatMonthYearLabel(appState.hospitalPerformanceMonth || new Date());
+            const win = window.open('', '_blank', 'width=900,height=700');
+            if (!win) { showModal('Could not open print window. Please allow pop-ups for this app.', 'warning'); return; }
+            const html = `
+                <html>
+                <head>
+                    <title>Hospital Monthly Report - ${monthLabel}</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; padding: 20px; color:#111 }
+                        h1 { font-size: 18px; margin-bottom: 8px }
+                        table { width:100%; border-collapse: collapse; margin-top: 12px }
+                        th, td { border:1px solid #ddd; padding:8px; text-align:left }
+                        th { background:#f6f6f6 }
+                        .hospital { font-weight:700 }
+                        .right { text-align:right }
+                    </style>
+                </head>
+                <body>
+                    <h1>Hospital Monthly Report</h1>
+                    <div>${monthLabel}</div>
+                    <table>
+                        <thead><tr><th>Hospital</th><th class="right">Total Revenue</th><th>PR Agent</th><th class="right">Referrals</th><th class="right">PR Revenue</th></tr></thead>
+                        <tbody>
+                            ${data.map(h => {
+                                const prRows = (h.prs && h.prs.length) ? h.prs.map(pr=>`<tr><td></td><td></td><td>${pr.name}</td><td class="right">${pr.orders}</td><td class="right">${formatCurrency(pr.revenue)}</td></tr>`).join('') : '';
+                                return `<tr><td class="hospital">${h.hospital}</td><td class="right">${formatCurrency(h.totalRevenue)}</td><td></td><td class="right">${h.orders}</td><td class="right"></td></tr>${prRows}`;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </body>
+                </html>
+            `;
+            win.document.write(html);
+            win.document.close();
+            win.focus();
+            setTimeout(() => { try { win.print(); } catch(e){} }, 500);
+        }
+
+        // Compute hospital performance for the selected calendar month (shows only hospitals with revenue > 0)
+        function getHospitalMonthlyPerformance(targetDate = appState.hospitalPerformanceMonth || new Date()) {
+            const month = targetDate.getMonth();
+            const year = targetDate.getFullYear();
+
+            const map = {};
+
+            // Prepopulate with assigned hospitals (so assigned hospitals show even with zero revenue)
+            prList.forEach(pr => {
+                const h = pr.hospital && pr.hospital.trim() ? pr.hospital.trim() : 'Unassigned';
+                if (!map[h]) map[h] = { totalRevenue: 0, orders: 0, prs: {} };
+                if (!map[h].prs[pr.name]) map[h].prs[pr.name] = { revenue: 0, orders: 0 };
+            });
+
+            orders.filter(o => {
+                const d = new Date(o.date);
+                return d.getMonth() === month && d.getFullYear() === year;
+            }).forEach(o => {
+                const h = (o.referredHospital && o.referredHospital.trim()) || 'Unassigned';
+                if (!map[h]) map[h] = { totalRevenue: 0, orders: 0, prs: {} };
+                map[h].totalRevenue += o.total || 0;
+                map[h].orders += 1;
+                const pr = o.referredBy || 'Unknown';
+                if (!map[h].prs[pr]) map[h].prs[pr] = { revenue: 0, orders: 0 };
+                map[h].prs[pr].revenue += o.total || 0;
+                map[h].prs[pr].orders += 1;
+            });
+
+            return Object.keys(map).map(h => ({
+                hospital: h,
+                totalRevenue: map[h].totalRevenue,
+                orders: map[h].orders,
+                prs: Object.keys(map[h].prs).map(name => ({ name, revenue: map[h].prs[name].revenue, orders: map[h].prs[name].orders })).sort((a,b) => b.revenue - a.revenue)
+            })).sort((a, b) => b.totalRevenue - a.totalRevenue);
         }
 
         // Inventory search suggestions (used on Inventory page)
@@ -4868,31 +5432,33 @@ function updateHeaderDateTime() {
             }, 120);
         }
 
-        function addNewPRAgent() {
+        async function addNewPRAgent() {
             const query = document.getElementById('referredBySearch').value.trim();
             if (!query) {
-                alert('Please enter a PR agent name');
-                                    showModal('Please enter a PR agent name', 'warning');
+                await showModal('Please enter a PR agent name', 'warning');
                 return;
             }
             const phone = prompt(`Enter phone number for "${query}" (optional):`, '');
             if (phone === null) return; // user cancelled
+            // Capture hospital if entered on billing form
+            const hospital = (document.getElementById('referringHospital') && document.getElementById('referringHospital').value.trim()) || '';
             // Add to prList
             const newId = (prList.length > 0 ? Math.max(...prList.map(p => p.id)) : 0) + 1;
             const finalPhone = phone.trim() || 'N/A';
-            prList.push({ id: newId, name: query, phone: finalPhone });
+            prList.push({ id: newId, name: query, phone: finalPhone, hospital: hospital });
             appState.billingData.referredBy = query;
+            if (hospital) appState.billingData.referringHospital = hospital;
             document.getElementById('referredBySearch').value = query;
             document.getElementById('prSuggestions').style.display = 'none';
             document.getElementById('addPRAgentContainer').style.display = 'none';
-            logAction('ADD_PR_AGENT', `New PR agent added: ${query} (${finalPhone})`);
+            logAction('ADD_PR_AGENT', `New PR agent added: ${query} (${finalPhone}) and assigned to hospital '${hospital || 'Unassigned'}'.`);
         }
 
         function handleFirstTimeSetup() {
             const setupName = document.getElementById('setupFullName').value.trim();
-            const setupUsername = document.getElementById('setupUsername').value.trim();
-            const setupPassword = document.getElementById('setupPassword').value;
-            const setupPasswordConfirm = document.getElementById('setupPasswordConfirm').value;
+            const setupUsername = (document.getElementById('setupUsername').value || '').trim().toLowerCase();
+            const setupPassword = (document.getElementById('setupPassword').value || '').toLowerCase();
+            const setupPasswordConfirm = (document.getElementById('setupPasswordConfirm').value || '').toLowerCase();
 
             if (!setupName || !setupUsername || !setupPassword || !setupPasswordConfirm) {
                 showModal('Please fill in all fields', 'warning');
@@ -4909,7 +5475,7 @@ function updateHeaderDateTime() {
                 return;
             }
 
-            // Create first admin user
+            // Create first admin user (store credentials lowercased for case-insensitive auth)
             users.push({
                 username: setupUsername,
                 password: setupPassword,
@@ -4960,7 +5526,7 @@ function updateHeaderDateTime() {
             renderApp();
         }
 
-        function billingStep(step) {
+        async function billingStep(step) {
             if (step === 2) {
                 appState.billingData.patientName = document.getElementById('patientName').value;
                 appState.billingData.contact = document.getElementById('patientContact').value;
@@ -4970,8 +5536,7 @@ function updateHeaderDateTime() {
 
                 saveDraft(); // Auto-save draft when moving to step 2
                 if (!appState.billingData.patientName || !appState.billingData.staffName) {
-                    alert('Please fill in Patient Name and Staff Name');
-                                        showModal('Please fill in Patient Name and Staff Name', 'warning');
+                    await showModal('Please fill in Patient Name and Staff Name', 'warning');
                     return;
                 }
             }
@@ -5175,10 +5740,11 @@ function updateHeaderDateTime() {
                     <title>Official Receipt - ${order.pid}</title>
                     <style>
                         @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
-                        body { font-family: 'Roboto', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; margin: 0; color: #1e293b; background-color: #f8fafc; font-weight: bold; }
-                        .receipt-container { width: 380px; margin: 0 auto; padding: 25px; background-color: #ffffff; min-height: 90vh; }
+                        body { font-family: 'Roboto', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; margin: 0; color: #1e293b; background-color: #f8fafc; }
+                        .receipt-container { width: 380px; margin: 0 auto; padding: 25px; background-color: #ffffff; min-height: 90vh; border: 1px solid #ddd; box-sizing: border-box; }
                         .receipt-header { text-align: center; border-bottom: 2px solid #334155; padding-bottom: 15px; margin-bottom: 20px; }
                         .receipt-header .logo { margin-bottom: 10px; }
+                        .receipt-header .logo img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
                         .receipt-header h2 { margin: 0; font-size: 1.8rem; font-weight: 700; color: #0e4a7c; }
                         .receipt-header .address { font-size: 0.9rem; color: #475569; margin-top: 8px; line-height: 1.5; }
                         .receipt-header .receipt-title { margin: 10px 0 0 0; font-size: 1rem; color: #475569; font-weight: bold; }
@@ -5339,15 +5905,29 @@ function updateHeaderDateTime() {
 
         function reprintReceiptById(orderId) {
             const order = orders.find(o => o.id === orderId);
-            if (order) printReceipt(order);
-            else showModal('Could not find order to print.', 'error');
+            if (order) {
+                showReceiptPreview(order).then(() => {
+                    // preview handled printing or cancel; nothing else to do here
+                }).catch(e => {
+                    console.error('reprintReceiptById error:', e);
+                    // Fallback to direct print if preview fails
+                    try { printReceipt(order); } catch(e2) { showModal('Unable to print receipt.', 'error'); }
+                });
+            } else {
+                showModal('Could not find order to print.', 'error');
+            }
         }
 
         // --- Helper functions for new service selection flow ---
         function addServiceById(id) {
+            console.debug('addServiceById called with id:', id);
             if (!id) return;
             const svc = inventory.find(i => String(i.id) === String(id));
-            if (!svc) return;
+            console.debug('addServiceById resolved svc:', svc);
+            if (!svc) {
+                console.warn('addServiceById: no matching service found for id:', id);
+                return;
+            }
             appState.billingData.selectedServices = appState.billingData.selectedServices || [];
             const exists = appState.billingData.selectedServices.find(s => String(s.id) === String(id));
             if (exists) return; // already added
@@ -5373,14 +5953,19 @@ function updateHeaderDateTime() {
         function renderServiceSuggestions(query, opts = {}) {
             const container = document.getElementById('serviceSuggestions');
             if (!container) return;
+            // Ensure the suggestions container is visible when we populate it
+            try { container.style.display = 'block'; container.style.maxHeight = '240px'; container.style.overflowY = 'auto'; container.scrollTop = 0; container.setAttribute('aria-expanded','true'); } catch(e) {}
+            container.style.display = 'block'; container.setAttribute('aria-expanded','true');
+
+            // Ensure the suggestions container is visible when we populate it
             const q = (query || '').trim().toLowerCase();
 
             // If expandCategory option provided and query matches a category, show that category items
             if (opts.expandCategory && q) {
             const cat = Object.keys(inventory.reduce((acc, s) => (acc[s.category] = true, acc), {})).find(c => c.toLowerCase().includes(q));
             if (cat) {
-                const list = inventory.filter(i => i.category === cat).map(i => `<div class="suggestion-item" data-id="${i.id}" style="padding:0.5rem; cursor:pointer;">${i.name} — ${formatCurrency(i.price)}</div>`).join('');
-                container.innerHTML = `<div style="font-weight:700; margin-bottom:0.25rem;">${cat}</div>${list}`;
+                const list = inventory.filter(i => i.category === cat).map(i => `<button type="button" class="suggestion-item" data-id="${i.id}" tabindex="0" role="option" style="display:block; width:100%; text-align:left; padding:0.5rem; cursor:pointer; border:1px solid var(--border); background:var(--background); border-radius:0.25rem; margin-bottom:0.25rem; transition:background 0.2s;">${i.name} — ${formatCurrency(i.price)}</button>`).join('');
+                container.innerHTML = `<div style="font-weight:700; margin-bottom:0.5rem;">${cat}</div>${list}`;
                 return;
             }
             }
@@ -5388,7 +5973,7 @@ function updateHeaderDateTime() {
             // If empty query, show categories list
             if (!q) {
             const cats = [...new Set(inventory.map(i => i.category))];
-            container.innerHTML = cats.map(c => `<button class="suggestion-item" data-category="${c}" style="margin:0.25rem; padding:0.35rem 0.6rem;">${c}</button>`).join('');
+            container.innerHTML = cats.map(c => `<button type="button" class="suggestion-item" data-category="${c}" tabindex="0" role="option" style="margin:0.25rem; padding:0.35rem 0.6rem; border:1px solid var(--border); background:var(--background); border-radius:0.25rem; cursor:pointer; transition:background 0.2s;">${c}</button>`).join('');
             return;
             }
 
@@ -5401,7 +5986,7 @@ function updateHeaderDateTime() {
 
             // Group matches by category
             const groups = matches.reduce((acc, s) => { if (!acc[s.category]) acc[s.category] = []; acc[s.category].push(s); return acc; }, {});
-            container.innerHTML = Object.keys(groups).map(cat => `<div style="margin-bottom:0.5rem;"><div style="font-weight:700;">${cat}</div>${groups[cat].map(i => `<div class="suggestion-item" data-id="${i.id}" style="padding:0.35rem; cursor:pointer;">${i.name} — ${formatCurrency(i.price)}</div>`).join('')}</div>`).join('');
+            container.innerHTML = Object.keys(groups).map(cat => `<div style="margin-bottom:0.75rem;"><div style="font-weight:700; margin-bottom:0.25rem;">${cat}</div>${groups[cat].map(i => `<button type="button" class="suggestion-item" data-id="${i.id}" tabindex="0" role="option" style="display:block; width:100%; text-align:left; padding:0.5rem; cursor:pointer; border:1px solid var(--border); background:var(--background); border-radius:0.25rem; margin-bottom:0.25rem; transition:background 0.2s;">${i.name} — ${formatCurrency(i.price)}</button>`).join('')}</div>`).join('');
         }
 
         // --- Inventory Page Autocomplete Logic ---
@@ -5542,6 +6127,9 @@ function updateHeaderDateTime() {
             const draftIndex = appState.drafts.findIndex(d => d.pid === appState.billingData.pid);
             if (draftIndex > -1) appState.drafts.splice(draftIndex, 1);
 
+            // Resolve referred hospital: prefer explicit field, else use PR's assigned hospital if available
+            const referredHospital = (appState.billingData.referringHospital && appState.billingData.referringHospital.trim()) || (prList.find(p => p.name === appState.billingData.referredBy && p.hospital && p.hospital.trim()) || {}).hospital || 'Not Specified';
+
             const newOrder = {
                 id: orders.length + 1,
                 patientName: appState.billingData.patientName,
@@ -5552,6 +6140,7 @@ function updateHeaderDateTime() {
                 total: appState.billingData.total,
                 status: appState.billingData.paymentStatus === 'full' ? 'PAID' : 'PENDING',
                 referredBy: appState.billingData.referredBy || 'Not Specified',
+                referredHospital: referredHospital,
                 date: new Date(), // Store as a full Date object
                 time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }), // Time can remain a string
                 staffName: appState.billingData.staffName
@@ -5567,6 +6156,8 @@ function updateHeaderDateTime() {
             orders.push(newOrder);
             autoSave(); // Save after adding a new order
             logAction('CREATE_BILLING', `Created new bill for '${newOrder.patientName}' (PID: ${newOrder.pid}) with a total of ${formatCurrency(newOrder.total)}.`);
+            // Immediately re-render so analytics (hospital performance) reflect this new billing
+            try { renderApp(); } catch(e) { console.error('renderApp error after billing:', e); }
 
             // Show a receipt preview modal which allows printing. After printing (or skipping), return to dashboard
             try {
@@ -5576,7 +6167,7 @@ function updateHeaderDateTime() {
             }
 
             appState.billingData = {
-                patientName: '', pid: '', contact: '', referredBy: '', staffName: '',
+                patientName: '', pid: '', contact: '', referredBy: '', referringHospital: '', staffName: '',
                 selectedServices: [], discount: 0, total: 0, paymentMethod: 'cash', paymentStatus: 'full',
                 amountPaid: 0, balance: 0,
                 splitPayments: { cash: 0, pos: 0, transfer: 0 }
@@ -5613,6 +6204,7 @@ function updateHeaderDateTime() {
         function addNewPR() {
             const name = document.getElementById('newPRName').value.trim();
             const phone = document.getElementById('newPRPhone').value.trim();
+            const hospital = document.getElementById('newPRHospital') ? document.getElementById('newPRHospital').value.trim() : '';
 
             if (!name) {
                 alert('Please fill in the PR name.');
@@ -5623,11 +6215,12 @@ function updateHeaderDateTime() {
             prList.push({
                 id: newId,
                 name,
-                phone: phone || 'N/A'
+                phone: phone || 'N/A',
+                hospital: hospital || ''
             });
 
             autoSave(); // Save the updated PR list
-            logAction('CREATE_PR', `Added new PR: '${name}' (${phone || 'N/A'}).`);
+            logAction('CREATE_PR', `Added new PR: '${name}' (${phone || 'N/A'}) assigned to hospital '${hospital || 'Unassigned'}'.`);
             appState.showAddPRForm = false;
             renderApp();
         }
@@ -5739,9 +6332,10 @@ function updateHeaderDateTime() {
             const oldDetails = `Name: ${pr.name}, Phone: ${pr.phone}`;
             pr.name = document.getElementById(`editPRName-${id}`).value.trim();
             pr.phone = document.getElementById(`editPRPhone-${id}`).value.trim();
+            pr.hospital = (document.getElementById(`editPRHospital-${id}`) && document.getElementById(`editPRHospital-${id}`).value.trim()) || '';
 
             autoSave(); // Save changes
-            logAction('EDIT_PR', `Edited PR #${id}. FROM: [${oldDetails}] TO: [Name: ${pr.name}, Phone: ${pr.phone}].`);
+            logAction('EDIT_PR', `Edited PR #${id}. FROM: [${oldDetails}] TO: [Name: ${pr.name}, Phone: ${pr.phone}, Hospital: ${pr.hospital || 'Unassigned'}].`);
             appState.editingPRId = null;
             renderApp();
         }
@@ -6521,29 +7115,38 @@ function updateHeaderDateTime() {
                 <head>
                     <title>Daily Records for ${viewDate}</title>
                     <style>
-                        body { font-family: sans-serif; }
-                        .report-header { text-align: center; margin-bottom: 2rem; }
-                        .report-header h1 { margin: 0; }
-                        .report-header p { margin: 5px 0; color: #555; }
-                        table { width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: 0.9rem; }
-                        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-                        th { background-color: #f2f2f2; }
+                        @media print { body { -webkit-print-color-adjust: exact; } }
+                        body { font-family: sans-serif; margin: 0; background: #f3f4f6; }
+                        .print-container { max-width: 900px; margin: 20px auto; background: #fff; border: 1px solid #ddd; padding: 18px; box-sizing: border-box; }
+                        .report-header { text-align: center; margin-bottom: 1rem; }
+                        .report-header .logo img { height: 60px; width: auto; display: block; margin: 0 auto 8px; }
+                        .report-header h1 { margin: 0; font-size: 1.25rem; }
+                        .report-header p { margin: 4px 0; color: #444; }
+                        .table-wrapper { overflow: hidden; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: 0.95rem; table-layout: auto; }
+                        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; vertical-align: top; word-break: break-word; }
+                        th { background-color: #f8fafc; }
                     </style>
                 </head>
                 <body>
-                    <div class="report-header">
-                        <h1>Patient Records</h1>
-                        <p><strong>${appState.companyProfile.name}</strong></p>
-                        <p>Records for: <strong>${viewDate}</strong></p>
+                    <div class="print-container">
+                        <div class="report-header">
+                            <div class="logo"><img src="${appState.companyProfile.logo}" alt="Company Logo"></div>
+                            <h1>Patient Records</h1>
+                            <p><strong>${appState.companyProfile.name}</strong></p>
+                            <p>Records for: <strong>${viewDate}</strong></p>
+                        </div>
+                        <div class="table-wrapper">
+                        <table>
+                            <thead><tr><th>Patient Name</th><th>PID</th><th>Services</th><th>Total</th><th>Status</th><th>Staff</th><th>Time</th></tr></thead>
+                            <tbody>
+                                ${dailyRecords.map(order => `
+                                    <tr><td>${order.patientName}</td><td>${order.pid}</td><td>${(order.services || []).map(s => typeof s === 'string' ? s : s.name).join(', ')}</td><td>${formatCurrency(order.total)}</td><td>${order.status}</td><td>${order.staffName}</td><td>${order.time || 'N/A'}</td></tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                        </div>
                     </div>
-                    <table>
-                        <thead><tr><th>Patient Name</th><th>PID</th><th>Services</th><th>Total</th><th>Status</th><th>Staff</th><th>Time</th></tr></thead>
-                        <tbody>
-                            ${dailyRecords.map(order => `
-                                <tr><td>${order.patientName}</td><td>${order.pid}</td><td>${order.services.map(s => s.name).join(', ')}</td><td>${formatCurrency(order.total)}</td><td>${order.status}</td><td>${order.staffName}</td><td>${order.time || 'N/A'}</td></tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
                 </body>
                 </html>
             `;
