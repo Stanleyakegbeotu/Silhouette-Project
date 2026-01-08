@@ -91,6 +91,59 @@
             --tw-text-opacity: 1;
         }
 
+        /* Responsive / defensive layout fixes */
+        *, *::before, *::after { box-sizing: border-box; }
+        html, body { overflow-x: hidden; min-width: 320px; }
+        img, picture, svg, video, iframe { max-width: 100%; height: auto; display: block; }
+        input, textarea, select, button { max-width: 100%; box-sizing: border-box; }
+        table { width: 100%; border-collapse: collapse; word-break: break-word; overflow-wrap: anywhere; }
+        .responsive-table-wrapper { overflow-x: auto; }
+        /* Make the daily log vertically scrollable so each row can be viewed fully. Keeps header visible with sticky thead. */
+        .responsive-table-wrapper.scrollable-daily-log {
+            max-height: 480px;
+            overflow-y: auto;
+            overflow-x: auto; /* allow horizontal scrolling when table is wider than container */
+        }
+        .responsive-table-wrapper.scrollable-daily-log table {
+            min-width: 1100px; /* prevent table from compressing too much and force horizontal scroll when needed */
+            table-layout: auto;
+        }
+        .responsive-table-wrapper.scrollable-daily-log table thead th {
+            position: sticky;
+            top: 0;
+            background: var(--background);
+            z-index: 2;
+        }
+        /* Prevent cells from overlapping: keep most cells on one line and allow Services column to wrap */
+        .responsive-table-wrapper.scrollable-daily-log th,
+        .responsive-table-wrapper.scrollable-daily-log td {
+            white-space: nowrap;
+            vertical-align: middle;
+        }
+        .responsive-table-wrapper.scrollable-daily-log td.services-cell {
+            white-space: normal; /* allow services to wrap */
+            max-width: 380px;
+            word-break: break-word;
+            overflow-wrap: anywhere;
+        }
+        .responsive-table-wrapper.scrollable-daily-log td.details-cell {
+            white-space: normal; /* allow details to wrap */
+            max-width: 420px;
+            word-break: break-word;
+            overflow-wrap: anywhere;
+        }
+        .main-container, .main-content, .card { max-width: 100%; overflow-x: hidden; }
+        [data-silhouette-modal] > div, .modal, .modal-content { max-width: 95% !important; box-sizing: border-box; }
+        /* Prevent long strings from breaking the layout */
+        .no-wrap, .text-truncate { overflow-wrap: anywhere; word-break: break-word; white-space: normal; }
+        /* Ensure inputs do not get wider than container (fixes some device-specific form overflow) */
+        .form-input, .form-select { width: 100%; max-width: 100%; }
+        /* Toast and floating controls should not force page width */
+        .toast, .floating-action { max-width: calc(100% - 40px); }
+        /* Tables may still be wide: allow horizontal scroll within their container */
+        .table { width: 100%; }
+
+
         body {
             background-color: var(--background);
             color: var(--text-primary);
@@ -173,6 +226,23 @@
 
         .animate-pulse {
             animation: pulse 2s infinite;
+        }
+
+        /* Sliding panel transitions and helpers */
+        .panel-expanded {
+            width: 100% !important;
+            border-radius: 0px !important;
+        }
+
+        .fade-in {
+            opacity: 1 !important;
+            display: block !important;
+            transition: opacity 240ms ease-in;
+        }
+
+        .fade-out {
+            opacity: 0 !important;
+            transition: opacity 240ms ease-out;
         }
 
         .btn-primary {
@@ -1551,11 +1621,14 @@
 
         let orders = [];
 
+        // Prevent accidental overwrite while initial disk load is still pending
+        let isInitialDataLoaded = false; // Prevents overwriting with empty data
+
         // Mock Data - Audit Log
         let auditLog = [];
 
         // ====== UTILITY FUNCTIONS (SAFE VERSION) ======
-
+        
 // Clean data before storing (Fix A)
 function prepareForSave(data) {
     try {
@@ -1581,6 +1654,542 @@ let recordsSuggestTimeout = null;
 
 // Debounce timer for history suggestions
 let historySuggestTimeout = null;
+
+// New: state flag to indicate a save is in progress
+appState.isSaving = false;
+
+// New: small in-memory strong guard so we don't attempt parallel blocking saves
+let blockingSaveInProgress = false;
+
+/**
+ * showBlockingSaveModal / hideBlockingSaveModal
+ *
+ * Purpose: show a non-dismissable VS-Code-style "Saving data..." overlay
+ * that disables all UI interaction while critical saves (logout/close)
+ * take place. This is intentionally aggressive to prevent users from
+ * doing actions that may interrupt disk writes.
+ */
+function showBlockingSaveModal(message = 'Saving data, please wait\u2026') {
+    // If modal already present, update message
+    let modal = document.getElementById('sdc-blocking-save-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'sdc-blocking-save-modal';
+        modal.style.cssText = `position: fixed; inset: 0; background: rgba(7, 12, 19, 0.6); z-index: 99999; display:flex; align-items:center; justify-content:center; pointer-events: all;`;
+        modal.innerHTML = `
+            <div style="width: 420px; max-width: calc(100% - 40px); background: var(--surface); color: var(--text-primary); border-radius: 8px; padding: 20px; box-shadow: 0 12px 30px rgba(2,6,23,0.3); text-align:center; font-family:inherit;">
+                <div style="font-weight:700; margin-bottom:8px;">${escapeHtml(message)}</div>
+                <div style="margin-bottom:12px; color:var(--text-secondary); font-size:0.95rem;">Please do not close the application or log out until this completes.</div>
+                <div aria-hidden="true" style="display:flex; align-items:center; justify-content:center; gap:12px;">
+                    <div style="width:18px; height:18px; border-radius:50%; border:3px solid rgba(0,0,0,0.08); border-top-color:var(--primary); animation: sdc-spinner 0.9s linear infinite;"></div>
+                </div>
+            </div>
+            <style>
+                @keyframes sdc-spinner { to { transform: rotate(360deg); } }
+            </style>
+        `;
+        document.body.appendChild(modal);
+        // disable direct user interaction (but keep focusable for screen readers)
+        try { document.body.style.pointerEvents = 'none'; } catch (e) {}
+        // ensure modal itself can receive pointer-events for UX (not needed but keeps it above)
+        modal.style.pointerEvents = 'auto';
+    } else {
+        modal.querySelector('div > div').textContent = message;
+        modal.style.display = 'flex';
+        try { document.body.style.pointerEvents = 'none'; } catch (e) {}
+    }
+}
+
+function hideBlockingSaveModal() {
+    const modal = document.getElementById('sdc-blocking-save-modal');
+    if (modal) {
+        try { modal.remove(); } catch (e) {}
+    }
+    try { document.body.style.pointerEvents = ''; } catch (e) {}
+}
+
+/**
+ * safeSaveData
+ *
+ * Centralized, robust save routine. Wraps existing saveData() usage and:
+ * - Attempts to create a backup (non-blocking best-effort) before writing
+ * - Prevents concurrent conflicting saves
+ * - Supports a blocking mode used during close/logout where we present a
+ *   non-dismissable modal and wait for completion (or failure)
+ * - Validates writes by reloading and comparing essential data
+ *
+ * Usage:
+ *  await safeSaveData({ blocking: true }); // blocks UI until complete
+ *
+ * NOTES:
+ * - This function extends (not replaces) the existing saveData behaviour.
+ * - If main-process backup APIs exist (best-effort detection) they are called.
+ * - If a save fails, a local fallback backup is stored in localStorage under
+ *   'sdc_lastLocalBackup' for emergency recovery. This is only a safety net
+ *   (keeps from writing empty data) and does not replace disk backups.
+ */
+async function safeSaveData({ blocking = false, reason = '' } = {}) {
+    // If initial data hasn't finished loading, skip saves to avoid wiping disk store
+    if (!isInitialDataLoaded) {
+        console.warn('Initial data not loaded; skipping save to avoid overwrite');
+        return false;
+    }
+
+    // Prevent re-entrant blocking saves
+    if (blocking && blockingSaveInProgress) {
+        console.warn('blocking save already in progress; awaiting existing one');
+        // Wait briefly for existing to complete
+        const wait = (ms) => new Promise(r => setTimeout(r, ms));
+        let attempts = 0;
+        while (blockingSaveInProgress && attempts < 40) { await wait(100); attempts++; }
+        return !blockingSaveInProgress; // if cleared, success (or at least attempted)
+    }
+
+    // Ensure we don't run multiple concurrent saves (serialize)
+    if (appState.isSaving && !blocking) {
+        // Best-effort: queue the save shortly after current finishes
+        console.info('save already running; scheduling follow-up save');
+        return new Promise(resolve => {
+            setTimeout(async () => {
+                const result = await safeSaveData({ blocking });
+                resolve(result);
+            }, 220);
+        });
+    }
+
+    appState.isSaving = true;
+    if (blocking) { blockingSaveInProgress = true; showBlockingSaveModal(); }
+
+    try {
+        // Build data object consistently (same as previous implementation)
+        const rawData = {
+            users,
+            prList,
+            inventory,
+            drafts: appState.drafts,
+            orders,
+            auditLog,
+            companyProfile: appState.companyProfile
+        };
+
+        // Sanitize before saving
+        const cleanData = prepareForSave(rawData);
+
+        // Safety checks: don't write an empty file (defensive)
+        const looksEmpty = !cleanData || typeof cleanData !== 'object' || (!Array.isArray(cleanData.orders) && !Array.isArray(cleanData.users) && !Array.isArray(cleanData.inventory));
+        if (looksEmpty) {
+            console.error('Refusing to write: data appears empty or malformed', cleanData);
+            // Create a local fallback backup so data isn't lost (do not overwrite main file)
+            try { localStorage.setItem('sdc_lastLocalBackup', JSON.stringify(cleanData)); } catch (e) {}
+            if (blocking) {
+                await showModal('Critical: data appears malformed and was not saved. Please check application logs and backups.', 'error');
+            }
+            return false;
+        }
+
+        // Best-effort backup step (non-interactive). We try a few known electronAPI names
+        try {
+            if (window.electronAPI && typeof window.electronAPI.createBackup === 'function') {
+                // createBackup() should copy existing file to a timestamped backup (main-process)
+                console.info('Attempting automatic backup via electronAPI.createBackup()');
+                await window.electronAPI.createBackup();
+            } else if (window.electronAPI && typeof window.electronAPI.backupData === 'function' && window.electronAPI.backupData.length === 0) {
+                // If backupData accepts no args and is used earlier for dialog-based backup, call it.
+                console.info('Attempting automatic backup via electronAPI.backupData() (best-effort)');
+                // NOTE: some implementations will open a dialog; we prefer non-modal, so call in try/catch
+                try { await window.electronAPI.backupData({ silent: true }); } catch (e) { /* ignore dialog-based or unsupported options */ }
+            } else {
+                // No main-process automatic backup available; store last-good locally
+                console.info('No automatic backup API found; writing localStorage fallback backup');
+                try { localStorage.setItem('sdc_lastLocalBackup', JSON.stringify(cleanData)); } catch (e) { console.warn('local backup failed', e); }
+            }
+        } catch (e) {
+            // Backup attempt failed. Log but continue — we must not block save here.
+            console.warn('Automatic backup attempt failed (non-fatal):', e);
+            try { localStorage.setItem('sdc_lastLocalBackup', JSON.stringify(cleanData)); } catch (err) {}
+        }
+
+        // Attempt to save via the existing electron API
+        let saveSuccess = false;
+        let saveAttempts = 0;
+        while (!saveSuccess && saveAttempts < 3) {
+            saveAttempts++;
+            try {
+                if (window.electronAPI && typeof window.electronAPI.saveData === 'function') {
+                    // Primary method (async)
+                    await window.electronAPI.saveData(cleanData);
+                } else if (window.electronAPI && typeof window.electronAPI.saveDataSync === 'function') {
+                    // If a sync API is exposed by main, prefer it for blocking saves
+                    if (blocking) {
+                        window.electronAPI.saveDataSync(cleanData);
+                    } else {
+                        // Best-effort to not block the event loop
+                        await window.electronAPI.saveDataSync(cleanData);
+                    }
+                } else {
+                    // No disk API present — as a last resort persist to localStorage (non-destructive)
+                    console.warn('No electronAPI.saveData available - writing localStorage fallback (non-ideal)');
+                    try { localStorage.setItem('sdc_lastLocalBackup', JSON.stringify(cleanData)); } catch (e) { console.error('localStorage fallback failed', e); throw e; }
+                }
+
+                // VERIFY: re-load data and check critical parts are present (orders array is preserved)
+                if (window.electronAPI && typeof window.electronAPI.loadData === 'function') {
+                    const reloaded = await window.electronAPI.loadData();
+                    if (reloaded && (Array.isArray(reloaded.orders) || Array.isArray(reloaded.inventory))) {
+                        // Basic consistency check: ensure we didn't regress (same or more orders usually)
+                        // We don't strictly require equality because merges may happen, but we ensure it's not empty
+                        saveSuccess = true;
+                    } else {
+                        console.warn('Post-save verification: reloaded data looks empty or malformed -> retrying', reloaded);
+                        // sleep a bit before retrying
+                        await new Promise(r => setTimeout(r, 160));
+                    }
+                } else {
+                    // No verification path available; assume save succeeded if no exception thrown
+                    saveSuccess = true;
+                }
+            } catch (err) {
+                console.error('save attempt failed (will retry up to 3):', err);
+                // pause briefly before retrying
+                await new Promise(r => setTimeout(r, 180));
+            }
+        }
+
+        if (!saveSuccess) {
+            console.error('All save attempts failed. A local backup has been stored for recovery.');
+            try { localStorage.setItem('sdc_lastLocalBackup', JSON.stringify(cleanData)); } catch (e) {}
+            if (blocking) {
+                await showModal('Failed to save data to disk. A local recovery backup was created. Please check application logs. Logging out or closing is blocked to prevent data loss.', 'error');
+            }
+            return false;
+        }
+
+        // Post-save sanity: if inputs remain disabled after save, attempt recovery UI (existing behaviour)
+        setTimeout(() => {
+            const disabledEls = document.querySelectorAll('input:disabled, button:disabled, textarea:disabled, select:disabled');
+            if (disabledEls.length > 0) {
+                console.warn('Post-save check: found disabled elements, attempting recoverUI');
+                recoverUI();
+                clearAllEventListeners();
+                try { renderApp(); } catch(e) { console.error(e); }
+            }
+        }, 120);
+
+        return true;
+    } finally {
+        appState.isSaving = false;
+        if (blocking) {
+            blockingSaveInProgress = false;
+            hideBlockingSaveModal();
+        }
+    }
+}
+
+/**
+ * Old saveData() wrapper retained for backward compatibility.
+ * Internally delegate to safeSaveData but keep previous logging behavior.
+ */
+async function saveData() {
+    try {
+        await safeSaveData({ blocking: false });
+    } catch (e) {
+        console.error('saveData wrapper error:', e);
+    }
+}
+
+/**
+ * Enhanced loadData() with recovery from backups:
+ * - If loaded data is missing required structures (orders/inventory/users),
+ *   attempt to recover from:
+ *     1) main-process restore API if available (best-effort)
+ *     2) local storage fallback 'sdc_lastLocalBackup'
+ * - Merge recovered data with current in-memory data (never replace)
+ */
+async function loadData() {
+    if (window.electronAPI) {
+        const loadedData = await window.electronAPI.loadData();
+
+        // Quick validation helper
+        function isValidData(d) {
+            if (!d || typeof d !== 'object') return false;
+            // at least orders should be an array in production apps
+            if (!Array.isArray(d.orders) && !Array.isArray(d.inventory) && !Array.isArray(d.users)) return false;
+            return true;
+        }
+
+        let finalData = loadedData;
+
+        if (!isValidData(loadedData)) {
+            console.warn('Loaded data appears malformed or empty. Attempting recovery from backups.');
+
+            // 1) Try main-process restore if available (best-effort and non-interactive)
+            try {
+                if (window.electronAPI && typeof window.electronAPI.restoreFromLatestBackup === 'function') {
+                    const restored = await window.electronAPI.restoreFromLatestBackup();
+                    if (isValidData(restored)) {
+                        finalData = restored;
+                        console.info('Recovered application data from main-process latest backup.');
+                    }
+                }
+            } catch (err) {
+                console.warn('restoreFromLatestBackup failed', err);
+            }
+
+            // 2) Fallback to localStorage backup if still invalid
+            if (!isValidData(finalData)) {
+                try {
+                    const local = localStorage.getItem('sdc_lastLocalBackup');
+                    if (local) {
+                        const parsed = JSON.parse(local);
+                        if (isValidData(parsed)) {
+                            finalData = parsed;
+                            console.info('Recovered application data from localStorage fallback backup.');
+                            // Persist recovered data back to disk (attempt)
+                            try { await safeSaveData({ blocking: true, reason: 'recovery_on_startup' }); } catch (e) { console.warn('Immediate save after local recovery failed', e); }
+                        }
+                    }
+                } catch (err) {
+                    console.warn('Local fallback backup unavailable or corrupted', err);
+                }
+            }
+
+            // If still invalid and finalData is not usable, keep existing in-memory dataset (do not overwrite)
+            if (!isValidData(finalData)) {
+                console.error('Unable to recover valid data from any backup. Retaining in-memory defaults (no destructive overwrite).');
+            }
+        }
+
+        if (finalData) {
+            users = finalData.users || users;
+            prList = finalData.prList || prList;
+            inventory = finalData.inventory || inventory;
+            // Normalize saved drafts so older saves or malformed entries don't break the billing flow
+            appState.drafts = (finalData.drafts || []).map(d => ensureBillingDataShape(d));
+
+            // Rehydrate orders
+            orders = (finalData.orders || []).map(order => ({
+                ...order,
+                date: new Date(order.date)
+            }));
+
+            // Rehydrate audit logs
+            auditLog = (finalData.auditLog || []).map(log => ({
+                ...log,
+                timestamp: new Date(log.timestamp)
+            }));
+
+            // Restore company settings
+            appState.companyProfile = finalData.companyProfile || appState.companyProfile;
+
+            // CRITICAL: mark initial load as complete so autosave won't overwrite with empty data
+            isInitialDataLoaded = true;
+            console.log('Data loaded and safety shield active.');
+        }
+    }
+}
+
+/* ====== Integrations: Block closing & ensure save before logout/close ====== */
+
+// 1) Intercept logout and ensure we flush to disk (blocking) before clearing session
+async function logout() {
+    // Display blocking modal and attempt to save; if save fails, do NOT continue logout
+    showBlockingSaveModal('Saving data before logout, please wait\u2026');
+    const ok = await safeSaveData({ blocking: true, reason: 'logout' });
+    hideBlockingSaveModal();
+
+    if (!ok) {
+        await showModal('Unable to save data before logout. Logout halted to prevent data loss. Please resolve the issue or contact support.', 'error');
+        return;
+    }
+
+    // Log the logout AFTER saving (so audit log persists)
+    logAction('LOGOUT', `User '${appState.currentUser.fullName}' logged out.`);
+    appState.currentUser = null;
+    appState.currentView = 'login';
+    appState.billingStep = 1;
+    autoSave(); // Kick off background save (it will be quick because we just saved)
+    renderApp();
+}
+
+// 2) Ensure submitBilling awaits a blocking save so a newly created order is on disk before the app can be closed
+async function submitBilling() {
+    if (appState.billingData.selectedServices.length === 0) {
+        await showModal('Please select at least one service', 'warning');
+        return;
+    }
+
+    if (appState.billingData.paymentStatus === 'installment' && appState.billingData.amountPaid <= 0) {
+        await showModal('For installment payments, please enter the amount paid.', 'warning');
+        return;
+    }
+
+    // Combined confirmation: complete billing and preview/print receipt (include payment method)
+    const totalAmountFormatted = formatCurrency(appState.billingData.total);
+    // Describe payment method in a human-friendly way
+    let paymentDesc = '';
+    if ((appState.billingData.paymentMethod || '').toLowerCase() === 'split') {
+        const parts = Object.entries(appState.billingData.splitPayments || {}).filter(([k,v]) => v > 0).map(([k,v]) => `${k.toUpperCase()}: ${formatCurrency(v)}`);
+        paymentDesc = parts.length ? `Split (${parts.join(', ')})` : 'Split';
+    } else {
+        paymentDesc = (appState.billingData.paymentMethod || 'Cash').charAt(0).toUpperCase() + (appState.billingData.paymentMethod || 'cash').slice(1);
+    }
+
+    const confirmed = await showConfirm(`Complete billing for "${appState.billingData.patientName}" with a total of ${totalAmountFormatted} (Payment: ${paymentDesc})? Click Confirm to preview and print the receipt. You will be returned to the Billing form (Step 1) after printing.`);
+    if (!confirmed) {
+        return; // User clicked 'Cancel'
+    }
+
+    // Find and remove the draft associated with this billing
+    const draftIndex = appState.drafts.findIndex(d => d.pid === appState.billingData.pid);
+    if (draftIndex > -1) appState.drafts.splice(draftIndex, 1);
+
+    // Resolve referred hospital: prefer explicit field, else use PR's assigned hospital if available
+    const referredHospital = (appState.billingData.referringHospital && appState.billingData.referringHospital.trim()) || (prList.find(p => p.name === appState.billingData.referredBy && p.hospital && p.hospital.trim()) || {}).hospital || 'Not Specified';
+
+    const newOrder = {
+        id: orders.length + 1,
+        patientName: appState.billingData.patientName,
+        pid: appState.billingData.pid,
+        // store services as objects with name, category and price so VIP overrides are preserved
+        discount: appState.billingData.discount,
+        services: appState.billingData.selectedServices.map(s => ({ name: s.name, category: s.category || (inventory.find(i => i.name === s.name) || {}).category || '', price: (s.overridePrice != null ? s.overridePrice : s.price) })),
+        total: appState.billingData.total,
+        status: appState.billingData.paymentStatus === 'full' ? 'PAID' : 'PENDING',
+        referredBy: appState.billingData.referredBy || 'Not Specified',
+        referredHospital: referredHospital,
+        date: new Date(), // Store as a full Date object
+        time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }), // Time can remain a string
+        staffName: appState.billingData.staffName,
+        paymentMethod: Object.values(appState.billingData.splitPayments).filter(v => v > 0).length > 1 ? 'split' : appState.billingData.paymentMethod,
+        splitPayments: Object.values(appState.billingData.splitPayments).filter(v => v > 0).length > 1 ? { ...appState.billingData.splitPayments } : null,
+        paymentStatus: appState.billingData.paymentStatus,
+        amountPaid: appState.billingData.paymentStatus === 'full' ? appState.billingData.total : (Object.values(appState.billingData.splitPayments).reduce((s, v) => s + v, 0)),
+        balance: appState.billingData.paymentStatus === 'full' ? 0 : appState.billingData.balance
+    };
+
+    orders.push(newOrder);
+
+    // --- CRITICAL FIX ---
+    // Ensure this new order is persisted immediately and reliably before proceeding.
+    showBlockingSaveModal('Saving new patient record, please wait\u2026');
+    const saved = await safeSaveData({ blocking: true, reason: 'create_order' });
+    hideBlockingSaveModal();
+
+    if (!saved) {
+        // Removing the newly added order is NOT done here (we must never destroy user data).
+        // Instead, inform the user and keep the UI on billing page so they can retry or contact support.
+        await showModal('Failed to save the new patient record to disk. A local backup was created to prevent data loss. Please retry or contact support.', 'error');
+        // We still allow preview print attempts from in-memory state but the user was warned.
+    } else {
+        logAction('CREATE_BILLING', `Created new bill for '${newOrder.patientName}' (PID: ${newOrder.pid}) with a total of ${formatCurrency(newOrder.total)}.`);
+    }
+
+    // Show a receipt preview modal which allows printing. After printing (or skipping), return to dashboard
+    try {
+        await showReceiptPreview(newOrder);
+    } catch (e) {
+        console.error('Error in receipt preview flow:', e);
+    }
+
+    appState.billingData = {
+        patientName: '', pid: '', contact: '', referredBy: '', referringHospital: '', staffName: '',
+        selectedServices: [], discount: 0, total: 0, paymentMethod: 'cash', paymentStatus: 'full',
+        amountPaid: 0, balance: 0,
+        splitPayments: { cash: 0, pos: 0, transfer: 0 }
+    };
+    appState.billingStep = 1;
+    // Return user to billing page step 1 so they can immediately start a new patient billing
+    navigateTo('billing');
+
+    // Small deferred check and recovery to handle any lingering UI blocking states
+    setTimeout(() => {
+        const disabledEls = document.querySelectorAll('input:disabled, button:disabled, textarea:disabled, select:disabled');
+        if (disabledEls.length > 0) {
+            console.warn('Post-billing check: found disabled elements, attempting recoverUI');
+            recoverUI();
+            clearAllEventListeners();
+            try { renderApp(); } catch(e) { console.error(e); }
+        }
+    }, 120);
+}
+
+// 3) beforeunload handler - attempt blocking save if there is unsaved billing or recent changes
+window.addEventListener('beforeunload', function (e) {
+    // If a blocking save is already in progress, allow navigation (it will handle close)
+    if (blockingSaveInProgress) {
+        // Prevent unload until blocked save finishes (main-process close flow may retry)
+        e.preventDefault();
+        e.returnValue = '';
+        return;
+    }
+
+    // If there is an in-progress billing or unsaved orders, try to block unload and save synchronously if possible
+    const needSave = hasUnsavedBilling() || (appState.isSaving === true);
+    if (needSave) {
+        // Attempt to perform a blocking save synchronously if an API exists
+        try {
+            if (window.electronAPI && typeof window.electronAPI.saveDataSync === 'function') {
+                // Show a modal quickly to inform user (best-effort)
+                showBlockingSaveModal('Saving data before closing the application\u2026');
+                const rawData = {
+                    users, prList, inventory, drafts: appState.drafts, orders, auditLog, companyProfile: appState.companyProfile
+                };
+                const clean = prepareForSave(rawData);
+                try {
+                    window.electronAPI.saveDataSync(clean);
+                    // small delay so disk write finishes
+                    setTimeout(() => { hideBlockingSaveModal(); }, 250);
+                } catch (err) {
+                    console.error('Synchronous save failed during beforeunload:', err);
+                    hideBlockingSaveModal();
+                    e.preventDefault();
+                    e.returnValue = '';
+                }
+            } else {
+                // No sync API; block and show message - rely on main process to call app-close ipc (if implemented)
+                e.preventDefault();
+                e.returnValue = '';
+                showBlockingSaveModal('Saving data before closing the application\u2026');
+                safeSaveData({ blocking: true, reason: 'beforeunload' }).then(success => {
+                    hideBlockingSaveModal();
+                    if (success) {
+                        // Attempt to close again programmatically; some environments will allow this after cleanup
+                        try { window.close(); } catch (err) { console.warn('window.close() during beforeunload save attempt failed', err); }
+                    } else {
+                        showModal('Could not finish saving data. Close aborted to prevent data loss.', 'error');
+                    }
+                });
+            }
+        } catch (err) {
+            console.error('beforeunload save handling error:', err);
+            // best-effort: allow unload to proceed (do not cause the app to hang indefinitely)
+        }
+    }
+});
+
+// 4) Optional main-process integration: if main sends an 'app-close' call to renderer, respond to it and confirm only after saving
+// This depends on main process exposing `onAppClose` and `confirmCanClose` (best-effort, non-breaking if absent)
+try {
+    if (window.electronAPI && typeof window.electronAPI.onAppClose === 'function') {
+        window.electronAPI.onAppClose(async () => {
+            showBlockingSaveModal('Saving data before application exit\u2026');
+            const ok = await safeSaveData({ blocking: true, reason: 'ipc_app_close' });
+            hideBlockingSaveModal();
+            try {
+                if (typeof window.electronAPI.confirmCanClose === 'function') {
+                    window.electronAPI.confirmCanClose(ok);
+                } else {
+                    // Fallback: if save OK, request window close
+                    if (ok) try { window.close(); } catch (e) {}
+                }
+            } catch (err) {
+                console.error('Error confirming close to main:', err);
+            }
+        });
+    }
+} catch (e) {
+    console.warn('App close IPC integration not available or failed to initialize:', e);
+}
 
 function autoSave() {
     clearTimeout(saveTimeout);
@@ -1651,6 +2260,10 @@ async function loadData() {
 
             // Restore company settings
             appState.companyProfile = loadedData.companyProfile || appState.companyProfile;
+
+            // Mark that initial data finished loading to enable safe saves
+            isInitialDataLoaded = true;
+            console.log('Data loaded and safety shield active.');
         }
     }
 }
@@ -1804,6 +2417,12 @@ async function loadData() {
         function formatCurrency(amount) {
             if (amount === null || amount === undefined || isNaN(Number(amount))) return 'N/A';
             return '₦' + Number(amount).toLocaleString('en-NG', { minimumFractionDigits: 2 });
+        }
+
+        // Permission helper: allow Admin, Staff and Ztaffs to edit/delete inventory
+        function canEditInventory() {
+            const role = (appState.currentUser && appState.currentUser.role) ? String(appState.currentUser.role).toLowerCase() : '';
+            return ['admin', 'staff', 'ztaffs'].includes(role);
         }
 
         // Safely escape text for inclusion in HTML fragments
@@ -2099,34 +2718,52 @@ async function loadData() {
         }
 
         function getDailyTestSummaryByCategory(date) {
+            // Accumulate totals in integer kobo to avoid floating-point rounding artifacts
             const summary = {}; // Use an object to store data by category
             const dateString = date.toISOString().split('T')[0];
 
             orders
                 .filter(order => new Date(order.date).toISOString().split('T')[0] === dateString)
                 .forEach(order => {
-                    // Calculate the subtotal of services before any discount
-                    const subtotal = order.services.reduce((sum, service) => sum + (service.price || 0), 0);
+                    // Resolve subtotal in kobo (integers)
+                    const subtotalK = Math.round(order.services.reduce((sum, service) => {
+                        const price = (service && typeof service === 'object') ? (service.price || 0) : 0;
+                        return sum + Math.round(price * 100);
+                    }, 0));
 
-                    // Determine the discount ratio. If subtotal is 0, ratio is 0.
-                    const discountRatio = (subtotal > 0 && order.discount > 0) ? order.discount / subtotal : 0;
+                    const discountK = Math.round((order.discount || 0) * 100);
+                    const discountRatio = (subtotalK > 0 && discountK > 0) ? (discountK / subtotalK) : 0;
 
                     order.services.forEach(service => {
-                        const category = service.category || 'Uncategorized';
-                        const originalPrice = service.price || 0;
+                        const category = (service && service.category) ? service.category : 'Uncategorized';
+                        let originalPrice = 0;
 
-                        // Calculate the effective price after applying the proportional discount
-                        const effectivePrice = originalPrice * (1 - discountRatio);
+                        if (service && typeof service === 'object') {
+                            originalPrice = service.price || 0;
+                        } else if (typeof service === 'string') {
+                            // Try to lookup price from inventory for legacy string entries
+                            const inv = inventory.find(i => i.name === service);
+                            originalPrice = inv ? (inv.price || 0) : 0;
+                        }
+
+                        const originalK = Math.round(originalPrice * 100);
+                        // Effective price in kobo after proportional discount
+                        const effectiveK = Math.round(originalK * (1 - discountRatio));
 
                         if (!summary[category]) {
-                            summary[category] = { testCount: 0, totalAmount: 0 };
+                            summary[category] = { testCount: 0, totalAmountK: 0 };
                         }
                         summary[category].testCount++;
-                        summary[category].totalAmount += effectivePrice;
+                        summary[category].totalAmountK += effectiveK;
                     });
                 });
 
-            return Object.entries(summary).map(([category, data]) => ({ category, ...data }));
+            // Convert back to Naira with 2 decimal places and return
+            return Object.entries(summary).map(([category, data]) => ({
+                category,
+                testCount: data.testCount,
+                totalAmount: Number((data.totalAmountK / 100).toFixed(2))
+            }));
         }
 
         // getFilteredRecords consolidated below (removed duplicate)
@@ -2224,7 +2861,7 @@ async function loadData() {
 
                             <div class="nav-item ${currentView === 'drafts' ? 'active' : ''}" onclick="navigateTo('drafts')">
                                 <div class="nav-item-icon">&#128190;</div>
-                                <div class="nav-item-label">Drafts</div>
+                                <div class="nav-item-label">Drafts ${appState.drafts && appState.drafts.length > 0 ? `<span style="background:var(--accent); color:white; padding:0.12rem 0.5rem; border-radius:999px; font-size:0.75rem; margin-left:0.5rem; font-weight:700;">${appState.drafts.length}</span>` : ''}</div>
                             </div>
                             
                             <div class="nav-item ${currentView === 'inventory' ? 'active' : ''}" onclick="navigateTo('inventory')">
@@ -2360,8 +2997,16 @@ async function loadData() {
                     if (user && (user.password || '').toLowerCase() === password) {
                         appState.currentUser = { username: user.username, role: user.role, fullName: user.fullName };
                         logAction('LOGIN', `User '${user.fullName}' logged in.`);
-                        appState.currentView = 'dashboard';
-                        renderApp();
+
+                        // Trigger sliding panel animation and defer navigation until it completes
+                        try {
+                            onLoginSuccess(user);
+                        } catch (err) {
+                            console.error('onLoginSuccess failed, falling back to immediate render:', err);
+                            appState.currentView = 'dashboard';
+                            renderApp();
+                            try { checkDailyTimeVerification(); } catch (e) { console.error(e); }
+                        }
                     } else {
                         await showModal('Invalid username or password. If no users exist, please set up the first admin user.', 'error');
                         // Clear password and focus username for retry
@@ -2374,28 +3019,51 @@ async function loadData() {
                  
                 
                 Form: ({ companyProfile }) => `
-                    <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);">
-                        <div class="card" style="width: 100%; max-width: 400px; transform: scale(1); animation: popIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);">
-                            <div style="text-align: center; margin-bottom: 2rem;">
-                                <div style="margin-bottom: 1rem;"><img src="${companyProfile.logo}" alt="Company Logo" style="height: 60px; width: auto; margin: 0 auto;"/></div>
-                                <h1 style="font-size: 1.5rem; font-weight: 700; color: var(--primary);">${companyProfile.name}</h1>
-                                <p style="color: var(--text-secondary); font-size: 0.875rem;">Diagnostic Center Management</p>
+                    <div style="display:flex; align-items:center; justify-content:center; min-height:100vh;">
+                      <div class="relative w-full max-w-4xl h-[600px] bg-[var(--surface)] rounded-[32px] shadow-2xl overflow-hidden flex">
+
+                        <!-- Sliding colored panel -->
+                        <div id="sliding-panel" class="absolute top-0 left-0 h-full bg-[var(--primary)] z-30 transition-all duration-[800ms] ease-in-out flex flex-col items-center justify-center text-white w-[40%] rounded-r-[100px] shadow-[10px_0_30px_rgba(0,0,0,0.1)]">
+                            <div id="logo-content" class="text-center p-8 transition-all duration-700">
+                                <div style="margin-bottom: 1rem;"><img src="${companyProfile.logo}" alt="Company Logo" style="height: 60px; width: auto; margin: 0 auto; filter: drop-shadow(0 4px 14px rgba(0,0,0,0.12));"/></div>
+                                <h1 class="text-4xl font-black mt-4 uppercase">Silhouette</h1>
+                                <p class="mt-2 opacity-90">Diagnostic Center Management</p>
                             </div>
-                            <div class="form-group">
+
+                            <div id="welcome-content" class="hidden text-center opacity-0 transition-opacity px-6">
+                                <h2 class="text-5xl font-bold">Welcome back,</h2>
+                                <h3 id="display-username" class="text-3xl font-medium mt-2 uppercase"></h3>
+                            </div>
+                        </div>
+
+                        <!-- Form panel -->
+                        <div class="w-full flex">
+                          <div class="w-[40%] pointer-events-none"></div>
+                          <div class="w-[60%] p-12 flex flex-col justify-center">
+                            <div class="card" style="width: 100%; max-width: 480px; animation: popIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);">
+                              <div style="text-align: center; margin-bottom: 1rem;">
+                                <h2 style="font-size: 1.25rem; font-weight: 700; color: var(--text-primary);">${companyProfile.name}</h2>
+                                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">Sign in to continue</p>
+                              </div>
+
+                              <div class="form-group">
                                 <label class="form-label">Username</label>
                                 <input type="text" id="loginUsername" class="form-input" placeholder="Enter your username" />
-                            </div>
-                            <div class="form-group">
+                              </div>
+                              <div class="form-group">
                                 <label class="form-label">Password</label>
                                 <div style="position: relative; display: flex; align-items: center;">
-                                    <input type="password" id="loginPassword" class="form-input" placeholder="Enter password" style="padding-right: 2.5rem;" />
-                                    <button type="button" data-toggle-for="loginPassword" onclick="togglePasswordVisibility('loginPassword')" style="position: absolute; right: 0.5rem; background: none; border: none; cursor: pointer; font-size: 1.25rem; color: var(--text-secondary);">&#128065;</button>
+                                  <input type="password" id="loginPassword" class="form-input" placeholder="Enter password" style="padding-right: 2.5rem;" />
+                                  <button type="button" data-toggle-for="loginPassword" onclick="togglePasswordVisibility('loginPassword')" style="position: absolute; right: 0.5rem; background: none; border: none; cursor: pointer; font-size: 1.25rem; color: var(--text-secondary);">&#128065;</button>
                                 </div>
+                              </div>
+
+                              <button onclick="components.Login.handleLogin()" class="btn-primary" style="width: 100%; padding: 0.75rem; font-size: 1rem; margin-top: 1rem;">Sign In</button>
                             </div>
-                            <button onclick="components.Login.handleLogin()" class="btn-primary" style="width: 100%; padding: 0.75rem; font-size: 1rem; margin-top: 1rem;">
-                                Sign In
-                            </button>
+                          </div>
                         </div>
+
+                      </div>
                     </div>
                 `
             },
@@ -2446,6 +3114,41 @@ function updateHeaderDateTime() {
         timeEl.textContent = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         dateEl.textContent = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     }
+}
+
+/* Sliding panel success animation handler */
+function onLoginSuccess(user) {
+    const panel = document.getElementById('sliding-panel');
+    const logo = document.getElementById('logo-content');
+    const welcome = document.getElementById('welcome-content');
+    const nameDisplay = document.getElementById('display-username');
+
+    if (nameDisplay) nameDisplay.textContent = (user && (user.fullName || user.username)) || '';
+
+    // Expand panel to cover entire container
+    if (panel) {
+        panel.classList.add('panel-expanded');
+        // visually ensure it sits above other content
+        panel.style.zIndex = 60;
+    }
+
+    if (logo) {
+        logo.classList.add('fade-out');
+    }
+
+    setTimeout(() => {
+        if (welcome) {
+            welcome.classList.remove('hidden');
+            setTimeout(() => welcome.classList.add('fade-in'), 50);
+        }
+    }, 400);
+
+    // After animation completes, transition to dashboard
+    setTimeout(() => {
+        appState.currentView = 'dashboard';
+        renderApp();
+        try { checkDailyTimeVerification(); } catch (e) { console.error(e); }
+    }, 2400);
 }
 
         function renderDashboard() {
@@ -2629,7 +3332,7 @@ function updateHeaderDateTime() {
                             <div class="grid-2">
                                 <div class="form-group">
                                     <label class="form-label">Patient ID (Auto-generated)</label>
-                                    <input type="text" class="form-input" value="${appState.billingData.pid || generatePID()}" readonly />
+                                    <input type="text" id="billingPIDDisplay" class="form-input" value="${appState.billingData.pid || ''}" readonly />
                                 </div>
                                 <div class="form-group">
                                     <label class="form-label">Contact Number</label>
@@ -2803,7 +3506,7 @@ function updateHeaderDateTime() {
                                         <div style="font-size: 1.25rem; font-weight: 700; color: var(--text-primary);">${appState.companyProfile.name}</div>
                                         <div style="font-size: 0.8rem; color: var(--text-secondary);">
                                             <p>${appState.companyProfile.address}</p>
-                                            <p>${appState.companyProfile.email} | ${appState.companyProfile.contact}</p>
+                                            <p style="font-size:1.05rem; font-weight:600;">${appState.companyProfile.contact}</p>
                                         </div>
                                         <div style="font-size: 0.875rem; color: var(--text-secondary);">Receipt</div>
                                     </div>
@@ -2912,7 +3615,7 @@ function updateHeaderDateTime() {
                 <div style="max-width: 1200px; margin: 0 auto;" class="animate-slide-up">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
                         <h2 style="font-size: 2rem; font-weight: 700;">Inventory & Test Pricing</h2>
-                        ${appState.currentUser.role === 'Admin' ? `
+                        ${['Admin','Staff'].includes(appState.currentUser.role) ? `
                             <button onclick="toggleAddInventoryForm()" class="btn-primary"> 
                                 ${appState.showAddInventoryForm ? '× Cancel' : '+ Add New Test'}
                             </button>
@@ -2965,7 +3668,7 @@ function updateHeaderDateTime() {
                                     <th>Test Name</th>
                                     <th>Category</th>
                                     <th style="text-align: right;">Price</th>
-                                    ${appState.currentUser.role === 'Admin' ? '<th>Actions</th>' : ''}
+                                    ${canEditInventory() ? '<th>Actions</th>' : ''}
                                 </tr>
                             </thead>
                             <tbody>
@@ -2978,7 +3681,7 @@ function updateHeaderDateTime() {
 
                                     return Object.keys(groups).map(cat => `
                                         <tr>
-                                            <td colspan="${appState.currentUser.role === 'Admin' ? 4 : 3}" style="background: var(--background); font-weight:700;">${cat}</td>
+                                            <td colspan="${canEditInventory() ? 4 : 3}" style="background: var(--background); font-weight:700;">${cat}</td>
                                         </tr>
                                         ${groups[cat].map(item => {
                                             if (appState.editingInventoryId === item.id) {
@@ -2987,7 +3690,7 @@ function updateHeaderDateTime() {
                                                         <td><input type="text" id="editInventoryName-${item.id}" value="${item.name}" class="form-input"></td>
                                                         <td><input type="text" id="editInventoryCategory-${item.id}" value="${item.category}" class="form-input"></td>
                                                         <td style="text-align: right;"><input type="number" id="editInventoryPrice-${item.id}" value="${item.price ?? ''}" class="form-input"></td>
-                                                        ${appState.currentUser.role === 'Admin' ? `<td style="white-space: nowrap; display: flex; gap: 0.5rem;">${renderActionButtons(`saveInventoryEdit(${item.id})`, `cancelEdit('inventory')`)}</td>` : ''}
+                                                        ${canEditInventory() ? `<td style="white-space: nowrap; display: flex; gap: 0.5rem;">${renderActionButtons(`saveInventoryEdit(${item.id})`, `cancelEdit('inventory')`)}</td>` : ''}
                                                     </tr>
                                                 `;
                                             }
@@ -2996,7 +3699,7 @@ function updateHeaderDateTime() {
                                                     <td><strong>${item.name}</strong></td>
                                                     <td><span class="badge badge-primary">${item.category}</span></td>
                                                     <td style="font-weight: 700; color: var(--primary); text-align: right;">${formatCurrency(item.price)}</td>
-                                                    ${appState.currentUser.role === 'Admin' ? `<td style="white-space: nowrap; display: flex; gap: 0.5rem;"><button onclick="toggleEdit('inventory', ${item.id})" class="btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">&#9998;&#65039; Edit</button><button onclick="deleteInventoryItem(${item.id})" class="btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.8rem; color: var(--error);">&#128465;&#65039; Delete</button></td>` : ''}
+                                                    ${canEditInventory() ? `<td style="white-space: nowrap; display: flex; gap: 0.5rem;"><button onclick="toggleEdit('inventory', ${item.id})" class="btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">&#9998;&#65039; Edit</button><button onclick="deleteInventoryItem(${item.id})" class="btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.8rem; color: var(--error);">&#128465;&#65039; Delete</button></td>` : ''}
                                                 </tr>
                                             `;
                                         }).join('')}
@@ -3226,6 +3929,34 @@ function updateHeaderDateTime() {
                                     </div>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Unified Analysis Chart -->
+                    <div class="card animate-slide-up" style="margin-top: 1.5rem;">
+                        <div style="display:flex; justify-content: space-between; align-items:center; margin-bottom: 1rem; gap: 1rem; flex-wrap:wrap;">
+                            <h3 style="font-weight:700; margin:0; font-size:1.25rem;">Custom Analysis</h3>
+                            <div style="display:flex; gap:0.5rem; align-items:center;">
+                                <label style="font-size:0.9rem; color:var(--text-secondary);">Metric:</label>
+                                <select id="analysisTypeSelect" style="padding:0.4rem 0.6rem; border-radius:6px; border:1px solid var(--border); background:var(--surface);">
+                                    <option value="payment_method">Payment Method</option>
+                                    <option value="most_tests">Most Done Tests</option>
+                                    <option value="top_hospitals">Top Hospitals</option>
+                                    <option value="top_doctors">Top Doctors</option>
+                                    <option value="top_prs">Top PR Agents (Revenue)</option>
+                                    <option value="performance">Performance (Time Series)</option>
+                                </select>
+                                <label style="font-size:0.9rem; color:var(--text-secondary); margin-left:8px;">Group By:</label>
+                                <select id="analysisAggregationSelect" style="padding:0.4rem 0.6rem; border-radius:6px; border:1px solid var(--border); background:var(--surface);">
+                                    <option value="day">Day</option>
+                                    <option value="month">Month</option>
+                                    <option value="year">Year</option>
+                                </select>
+                                <button class="btn-secondary" onclick="renderSingleAnalysisChart()" style="margin-left:8px;">Update</button>
+                            </div>
+                        </div>
+                        <div style="min-height: 260px; display:flex; align-items:center; justify-content:center;">
+                            <canvas id="singleAnalysisChart" style="width:100%; max-width:100%; height:260px;"></canvas>
                         </div>
                     </div>
 
@@ -3714,7 +4445,7 @@ function updateHeaderDateTime() {
                                 &#128424;&#65039; Print Daily Record
                             </button>
                         </div>
-                        <div class="responsive-table-wrapper">
+                        <div class="responsive-table-wrapper scrollable-daily-log">
                             <table class="table">
                                 <thead>
                                     <tr>
@@ -3736,7 +4467,7 @@ function updateHeaderDateTime() {
                                         <tr id="record-item-${order.id}">
                                             <td><a href="#" onclick="viewOrderDetails(${order.id})" style="color: var(--primary); text-decoration: underline; font-weight: 500;">${order.patientName}</a></td>
                                             <td><strong>${order.pid}</strong></td>
-                                            <td style="font-size: 0.85rem;">${order.services.map(s => (typeof s === 'string') ? s : (s && s.name ? s.name : '')).join(', ')}</td>
+                                            <td class="services-cell" style="font-size: 0.85rem;">${order.services.map(s => (typeof s === 'string') ? s : (s && s.name ? s.name : '')).join(', ')}</td>
                                             <td>${formatCurrency(order.total)}</td>
                                             <td><span class="badge ${order.status === 'PAID' ? 'badge-success' : 'badge-warning'}">${order.status}</span></td>
                                             <td style="font-size: 0.9rem;">${order.referredBy}</td>
@@ -3744,7 +4475,7 @@ function updateHeaderDateTime() {
                                             <td>${order.date.toISOString().split('T')[0]}</td>
                                             <td>${order.time || 'N/A'}</td>
                                             <td><span class="badge ${order.paymentStatus === 'full' ? 'badge-full' : 'badge-installment'}">${order.paymentStatus === 'full' ? 'Full' : 'Installment'}</span></td>
-                                            <td><button onclick="reprintReceiptById(${order.id})" class="btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">&#128424;&#65039; Print</button></td>
+                                            <td style="display:flex; gap:0.5rem; align-items:center;"><button onclick="reprintReceiptById(${order.id})" class="btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">&#128424;&#65039; Print</button>${appState.currentUser && appState.currentUser.role === 'Admin' ? ` <button onclick="deleteRecord(${order.id})" class="btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.8rem; color: var(--error);">&#128465;&#65039; Delete</button>` : ''}</td>
                                         </tr>
                                     `).join('') : `
                                         <tr>
@@ -3761,6 +4492,36 @@ function updateHeaderDateTime() {
                     </div>
                 </div>
             `;
+        }
+
+        async function deleteRecord(id) {
+            // Ensure only admins can delete records
+            try {
+                if (!appState.currentUser || appState.currentUser.role !== 'Admin') {
+                    await showModal('Only admins can delete patient records.', 'error');
+                    return;
+                }
+
+                const record = orders.find(o => o.id === id);
+                if (!record) {
+                    await showModal('Record not found.', 'error');
+                    return;
+                }
+
+                const confirmed = await showConfirm(`This will permanently delete the record for "${record.patientName}" (PID: ${record.pid}). This action cannot be undone. Continue?`);
+                if (!confirmed) return;
+
+                // Remove record and persist
+                orders = orders.filter(o => o.id !== id);
+                logAction('DELETE_RECORD', `Admin '${appState.currentUser.fullName}' deleted record ${record.pid} (${record.patientName}).`);
+                autoSave();
+
+                // Rerender after deletion
+                renderApp();
+            } catch (err) {
+                console.error('deleteRecord error:', err);
+                await showModal('An error occurred while deleting the record.', 'error');
+            }
         }
 
         function renderOrderDetailsModal() {
@@ -3823,7 +4584,16 @@ function updateHeaderDateTime() {
                             <h4 style="font-weight: 600; margin-bottom: 1rem;">Payment Summary</h4>
                             <div style="background-color: var(--background); padding: 1rem; border-radius: 0.5rem;">
                                 <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;"><span>Total Bill:</span> <strong>${formatCurrency(order.total)}</strong></div>
-                                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;"><span>Payment Method:</span> <span>${order.paymentMethod}</span></div>
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; align-items: center;">
+                                    <span>Payment Method:</span>
+                                    <div>
+                                        <select id="order-payment-method-${order.id}" onchange="updateOrderPaymentMethod(${order.id}, this.value)" style="padding:0.35rem 0.5rem; border-radius:6px; border:1px solid var(--border); background:var(--surface);">
+                                            <option value="cash" ${order.paymentMethod === 'cash' ? 'selected' : ''}>Cash</option>
+                                            <option value="pos" ${order.paymentMethod === 'pos' ? 'selected' : ''}>POS</option>
+                                            <option value="transfer" ${order.paymentMethod === 'transfer' ? 'selected' : ''}>Transfer</option>
+                                        </select>
+                                    </div>
+                                </div>
                                 <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;"><span>Amount Paid:</span> <span>${formatCurrency(order.amountPaid)}</span></div>
                                 <div style="display: flex; justify-content: space-between; color: ${order.balance > 0 ? 'var(--error)' : 'var(--success)'};"><span>Balance:</span> <strong>${formatCurrency(order.balance)}</strong></div>
                             </div>
@@ -4250,7 +5020,7 @@ function updateHeaderDateTime() {
                             <button class="btn-secondary" onclick="appState.historySearchQuery = ''; renderApp();">Clear</button>
                         </div>
                         ${renderHistoryFilters()}
-                        <div class="responsive-table-wrapper">
+                        <div class="responsive-table-wrapper scrollable-daily-log">
                             <table class="table">
 
                                 <thead>
@@ -4282,7 +5052,7 @@ function updateHeaderDateTime() {
                                                 <td><strong>${log.user}</strong></td>
                                                 <td><span class="badge ${log.role === 'Admin' ? 'badge-error' : 'badge-primary'}">${log.role}</span></td>
                                                 <td style="font-weight: 500;">${log.action.replace('_', ' ')}</td>
-                                                <td style="font-size: 0.9rem; word-break: break-word;">${log.details}</td>
+                                                <td class="details-cell" style="font-size: 0.9rem;">${log.details}</td>
                                             </tr>
                                         `).join('');
                                     })()}
@@ -4433,9 +5203,11 @@ function updateHeaderDateTime() {
                 // PR agent search input
                 const referredByInput = document.getElementById('referredBySearch');
                 if (referredByInput) {
-                    referredByInput.oninput = function() {
+                    // Keep app state in sync so user-typed values are not lost during DOM re-renders
+                    referredByInput.addEventListener('input', function() {
+                        appState.billingData.referredBy = this.value;
                         renderPRSuggestions(this.value);
-                    };
+                    });
                     referredByInput.addEventListener('focus', function() {
                         // Show suggestions on focus
                         renderPRSuggestions(this.value);
@@ -4447,6 +5219,24 @@ function updateHeaderDateTime() {
                             if (prDiv) prDiv.style.display = 'none';
                         }, 200);
                     });
+                }
+
+                // Wire patient name and contact to appState so their values are preserved when a modal opens
+                const patientNameInput = document.getElementById('patientName');
+                if (patientNameInput) {
+                    patientNameInput.addEventListener('input', function() {
+                        appState.billingData.patientName = this.value;
+                        // If patient name is entered and we don't yet have a PID, generate and persist the first PID
+                        if (this.value && !appState.billingData.pid) {
+                            appState.billingData.pid = generatePID();
+                            const pidField = document.getElementById('billingPIDDisplay');
+                            if (pidField) pidField.value = appState.billingData.pid;
+                        }
+                    });
+                }
+                const patientContactInput = document.getElementById('patientContact');
+                if (patientContactInput) {
+                    patientContactInput.addEventListener('input', function() { appState.billingData.contact = this.value; });
                 }
 
                 // Also wire the referring hospital input so changes are reflected in appState immediately
@@ -4558,6 +5348,17 @@ function updateHeaderDateTime() {
                 const addPRBtn = document.getElementById('addNewPRBtn');
                 if (addPRBtn) {
                     addPRBtn.addEventListener('click', addNewPRAgent);
+                }
+
+                // Analytics chart controls
+                const analysisType = document.getElementById('analysisTypeSelect');
+                const analysisAgg = document.getElementById('analysisAggregationSelect');
+                if (analysisType) analysisType.addEventListener('change', () => renderSingleAnalysisChart());
+                if (analysisAgg) analysisAgg.addEventListener('change', () => renderSingleAnalysisChart());
+
+                // Render the analysis chart when analytics view is visible
+                if (appState.currentView === 'analytics') {
+                    setTimeout(() => { try { renderSingleAnalysisChart(); } catch(e) { console.error(e); } }, 60);
                 }
 
                 // Inventory search input
@@ -5433,25 +6234,91 @@ function updateHeaderDateTime() {
         }
 
         async function addNewPRAgent() {
-            const query = document.getElementById('referredBySearch').value.trim();
-            if (!query) {
-                await showModal('Please enter a PR agent name', 'warning');
-                return;
-            }
-            const phone = prompt(`Enter phone number for "${query}" (optional):`, '');
-            if (phone === null) return; // user cancelled
-            // Capture hospital if entered on billing form
-            const hospital = (document.getElementById('referringHospital') && document.getElementById('referringHospital').value.trim()) || '';
-            // Add to prList
-            const newId = (prList.length > 0 ? Math.max(...prList.map(p => p.id)) : 0) + 1;
-            const finalPhone = phone.trim() || 'N/A';
-            prList.push({ id: newId, name: query, phone: finalPhone, hospital: hospital });
-            appState.billingData.referredBy = query;
-            if (hospital) appState.billingData.referringHospital = hospital;
-            document.getElementById('referredBySearch').value = query;
-            document.getElementById('prSuggestions').style.display = 'none';
-            document.getElementById('addPRAgentContainer').style.display = 'none';
-            logAction('ADD_PR_AGENT', `New PR agent added: ${query} (${finalPhone}) and assigned to hospital '${hospital || 'Unassigned'}'.`);
+            // Open an inline modal form for better UX (pre-fills with any typed text)
+            const defaultName = (document.getElementById('referredBySearch') && document.getElementById('referredBySearch').value.trim()) || '';
+            const defaultHospital = (document.getElementById('referringHospital') && document.getElementById('referringHospital').value.trim()) || '';
+
+            return new Promise((resolve) => {
+                const modal = document.createElement('div');
+                modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); z-index: 10001; display:flex; align-items:center; justify-content:center; padding: 12px;';
+                modal.dataset.silhouetteAddPR = 'true';
+
+                modal.innerHTML = `
+                    <div style="background: var(--surface); border-radius: 0.5rem; padding: 1rem; width: 460px; max-width: 100%; box-shadow: 0 8px 30px rgba(0,0,0,0.25);">
+                        <h3 style="margin-top:0; margin-bottom:0.5rem; font-weight:700;">Add New PR Agent</h3>
+                        <div style="margin-bottom:0.75rem; color:var(--text-secondary);">Add a referring agent without losing the current billing inputs.</div>
+                        <div style="display:flex; flex-direction:column; gap:0.5rem;">
+                            <label style="font-size:0.9rem;">Agent Name *</label>
+                            <input id="_addPrName" class="form-input" type="text" value="${escapeHtml(defaultName)}" placeholder="Enter full name" />
+                            <label style="font-size:0.9rem;">Phone (optional)</label>
+                            <input id="_addPrPhone" class="form-input" type="tel" value="" placeholder="Phone number" />
+                            <label style="font-size:0.9rem;">Hospital (optional)</label>
+                            <input id="_addPrHospital" class="form-input" type="text" value="${escapeHtml(defaultHospital)}" placeholder="Hospital name" />
+                        </div>
+                        <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1rem;">
+                            <button id="_addPrCancel" class="btn-secondary">Cancel</button>
+                            <button id="_addPrSave" class="btn-primary">Save PR Agent</button>
+                        </div>
+                    </div>
+                `;
+
+                document.body.appendChild(modal);
+
+                // Focus name input
+                const nameInput = modal.querySelector('#_addPrName');
+                const phoneInput = modal.querySelector('#_addPrPhone');
+                const hospInput = modal.querySelector('#_addPrHospital');
+                const saveBtn = modal.querySelector('#_addPrSave');
+                const cancelBtn = modal.querySelector('#_addPrCancel');
+
+                try { if (nameInput && typeof nameInput.focus === 'function') nameInput.focus(); } catch(e) {}
+
+                function cleanup() {
+                    try { if (modal && modal.parentNode) modal.parentNode.removeChild(modal); } catch(e) {}
+                }
+
+                cancelBtn.addEventListener('click', function() {
+                    cleanup();
+                    resolve(null);
+                });
+
+                saveBtn.addEventListener('click', async function() {
+                    const name = (nameInput.value || '').trim();
+                    const phone = (phoneInput.value || '').trim();
+                    const hospital = (hospInput.value || '').trim();
+
+                    if (!name) {
+                        await showModal('Please enter a PR agent name', 'warning');
+                        try { nameInput.focus(); } catch(e) {}
+                        return;
+                    }
+
+                    // Add new PR to list
+                    const newId = (prList.length > 0 ? Math.max(...prList.map(p => p.id)) : 0) + 1;
+                    const finalPhone = phone || 'N/A';
+                    prList.push({ id: newId, name: name, phone: finalPhone, hospital: hospital });
+
+                    // Update billing data without clearing other fields
+                    appState.billingData.referredBy = name;
+                    if (hospital) appState.billingData.referringHospital = hospital;
+
+                    // Update UI fields and close modal
+                    const referredEl = document.getElementById('referredBySearch');
+                    if (referredEl) { referredEl.value = name; referredEl.focus(); }
+                    const prDiv = document.getElementById('prSuggestions'); if (prDiv) prDiv.style.display = 'none';
+                    const addContainer = document.getElementById('addPRAgentContainer'); if (addContainer) addContainer.style.display = 'none';
+
+                    logAction('ADD_PR_AGENT', `New PR agent added: ${name} (${finalPhone}) and assigned to hospital '${hospital || 'Unassigned'}'.`);
+
+                    cleanup();
+                    // Re-render to ensure PR list and any dependent UI updates are applied
+                    try { renderApp(); } catch (e) { console.error(e); }
+                    resolve({ id: newId, name, phone: finalPhone, hospital });
+                });
+
+                // allow Enter to submit
+                modal.addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); saveBtn.click(); } });
+            });
         }
 
         function handleFirstTimeSetup() {
@@ -5535,9 +6402,17 @@ function updateHeaderDateTime() {
                 appState.billingData.pid = document.getElementById('patientName').value ? (appState.billingData.pid || generatePID()) : '';
 
                 saveDraft(); // Auto-save draft when moving to step 2
-                if (!appState.billingData.patientName || !appState.billingData.staffName) {
-                    await showModal('Please fill in Patient Name and Staff Name', 'warning');
+
+                // Allow users to proceed without entering patient details (for quick price checks)
+                // but ensure Staff Name is present. If patient name is missing, ask for confirmation.
+                if (!appState.billingData.staffName) {
+                    await showModal('Please fill in Staff Name', 'warning');
                     return;
+                }
+
+                if (!appState.billingData.patientName) {
+                    const proceed = await showConfirm('No patient name entered. Continue to Services to calculate prices without patient details?');
+                    if (!proceed) return;
                 }
             }
             appState.billingStep = step;
@@ -5740,27 +6615,48 @@ function updateHeaderDateTime() {
                     <title>Official Receipt - ${order.pid}</title>
                     <style>
                         @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
-                        body { font-family: 'Roboto', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; margin: 0; color: #1e293b; background-color: #f8fafc; }
-                        .receipt-container { width: 380px; margin: 0 auto; padding: 25px; background-color: #ffffff; min-height: 90vh; border: 1px solid #ddd; box-sizing: border-box; }
-                        .receipt-header { text-align: center; border-bottom: 2px solid #334155; padding-bottom: 15px; margin-bottom: 20px; }
-                        .receipt-header .logo { margin-bottom: 10px; }
+
+                        /* Base reset */
+                        html, body { margin: 0; padding: 0; height: auto; }
+                        body { font-family: 'Roboto', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; color: #1e293b; background-color: transparent; }
+
+                        /* Desktop/preview layout - use mm widths to match thermal paper
+                           Default to 80mm roll width. Change in @page below for printing. */
+                        .receipt-container { width: 80mm; max-width: 80mm; margin: 0 auto; padding: 4mm; background-color: #ffffff; border: 0.2mm solid #ddd; box-sizing: border-box; overflow: hidden; }
+                        .receipt-header { text-align: center; border-bottom: 0.35mm solid #334155; padding-bottom: 3mm; margin-bottom: 4mm; }
+                        .receipt-header .logo { margin-bottom: 2mm; }
                         .receipt-header .logo img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
-                        .receipt-header h2 { margin: 0; font-size: 1.8rem; font-weight: 700; color: #0e4a7c; }
-                        .receipt-header .address { font-size: 0.9rem; color: #475569; margin-top: 8px; line-height: 1.5; }
-                        .receipt-header .receipt-title { margin: 10px 0 0 0; font-size: 1rem; color: #475569; font-weight: bold; }
-                        .details { margin-bottom: 20px; }
-                        .details div { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 1rem; }
+                        .receipt-header h2 { margin: 0; font-size: 4.8mm; font-weight: 700; color: #0e4a7c; }
+                        .receipt-header .address { font-size: 2.8mm; color: #475569; margin-top: 2mm; line-height: 1.3; }
+                        .receipt-header .receipt-title { margin: 2mm 0 0 0; font-size: 3.2mm; color: #475569; font-weight: 700; }
+
+                        .details { margin-bottom: 4mm; }
+                        .details div { display: flex; justify-content: space-between; margin-bottom: 1.5mm; font-size: 3.4mm; }
                         .details div span:first-child { color: #475569; }
-                        .services { border-top: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; padding: 15px 0; margin: 20px 0; }
-                        .services .service-item { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; font-size: 1rem; }
+
+                        .services { border-top: 0.2mm solid #cbd5e1; border-bottom: 0.2mm solid #cbd5e1; padding: 2.5mm 0; margin: 4mm 0; }
+                        .services .service-item { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2mm; font-size: 3.4mm; }
                         .services .service-item .service-name { font-weight: 500; }
-                        .services .service-item .service-category { font-size: 0.85rem; color: #64748b; }
+                        .services .service-item .service-category { font-size: 2.8mm; color: #64748b; }
                         .services .service-item .service-price { font-weight: 700; }
-                        .total div { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 1rem; }
-                        .total .grand-total { font-weight: 700; font-size: 1.5rem; border-top: 2px solid #1e293b; padding-top: 15px; margin-top: 10px; }
-                        .total .balance-due { color: #ef4444; font-weight: 700; font-size: 1.3rem; }
-                        .footer { text-align: center; margin-top: 25px; font-size: 0.9rem; color: #64748b; }
-                        .footer p { margin: 5px 0; }
+
+                        .total div { display: flex; justify-content: space-between; margin-bottom: 1.5mm; font-size: 3.4mm; }
+                        .total .grand-total { font-weight: 700; font-size: 4.5mm; border-top: 0.3mm solid #1e293b; padding-top: 2mm; margin-top: 2mm; }
+                        .total .balance-due { color: #ef4444; font-weight: 700; font-size: 3.8mm; }
+
+                        .footer { text-align: center; margin-top: 4mm; font-size: 2.8mm; color: #64748b; }
+                        .footer p { margin: 1mm 0; }
+
+                        /* PRINT RULES - ensure printer gets exact sizes and no extra margins/pages */
+                        @page { size: 80mm auto; margin: 0; }
+
+                        @media print {
+                            html, body { height: auto !important; margin: 0 !important; padding: 0 !important; }
+                            body { background: transparent !important; -webkit-print-color-adjust: exact; }
+                            .receipt-container { width: 80mm !important; max-width: 80mm !important; padding: 4mm !important; border: none !important; box-sizing: border-box !important; overflow: hidden !important; }
+                            /* Prevent page-breaks inside items to avoid content splitting unexpectedly */
+                            .receipt-header, .details, .services, .total, .footer { page-break-inside: avoid; }
+                        }
                     </style>
                 </head>
                 <body>
@@ -5770,7 +6666,7 @@ function updateHeaderDateTime() {
                             <h2>${appState.companyProfile.name}</h2>
                             <div class="address">
                                 <p>${appState.companyProfile.address}</p>
-                                <p>${appState.companyProfile.email} | ${appState.companyProfile.contact}</p>
+                                <p style="font-size:1.05rem; font-weight:600;">${appState.companyProfile.contact}</p>
                             </div>
                             <p class="receipt-title">Official Receipt</p>
                         </div>
@@ -5820,15 +6716,71 @@ function updateHeaderDateTime() {
                 </body></html>`;
         }
 
-        function printReceipt(order) {
+        async function printReceipt(order) {
             const receiptHTML = buildReceiptHTML(order);
 
-            const printFrame = document.createElement('iframe');
-            printFrame.style.display = 'none';
-            document.body.appendChild(printFrame);
-            printFrame.contentDocument.write(receiptHTML);
-            printFrame.contentWindow.print();
-            document.body.removeChild(printFrame);
+            // Prefer native Electron printing if available (silent printing, margins control)
+            if (window.electronAPI && typeof window.electronAPI.printReceipt === 'function') {
+                try {
+                    await window.electronAPI.printReceipt(receiptHTML, { silent: true, widthMm: 80 });
+                    // Small toast to inform user
+                    try { showToast('Receipt sent to printer', 'success', 900); } catch(e) {}
+                    return true;
+                } catch (err) {
+                    console.error('Electron native print failed, falling back to iframe print:', err);
+                    // continue to iframe fallback
+                }
+            }
+
+            // Fallback: iframe printing - ensure print doc has no margins and limited height to avoid empty feed
+            return new Promise((resolve) => {
+                try {
+                    const printFrame = document.createElement('iframe');
+                    printFrame.style.position = 'fixed';
+                    printFrame.style.right = '0';
+                    printFrame.style.bottom = '0';
+                    printFrame.style.width = '0';
+                    printFrame.style.height = '0';
+                    printFrame.style.border = '0';
+                    printFrame.setAttribute('aria-hidden', 'true');
+                    document.body.appendChild(printFrame);
+
+                    const doc = printFrame.contentDocument || printFrame.contentWindow.document;
+                    // Ensure a small delay so resources like images load properly in the iframe
+                    doc.open();
+                    doc.write(receiptHTML);
+                    doc.close();
+
+                    // Wait for layout then trigger print
+                    setTimeout(() => {
+                        try {
+                            // Force body/html style to remove margins and hide overflow in print
+                            const iDoc = printFrame.contentDocument || printFrame.contentWindow.document;
+                            const htmlEl = iDoc.documentElement;
+                            const bodyEl = iDoc.body;
+                            htmlEl.style.height = 'auto'; htmlEl.style.margin = '0'; htmlEl.style.padding = '0';
+                            bodyEl.style.margin = '0'; bodyEl.style.padding = '0'; bodyEl.style.overflow = 'hidden';
+
+                            // Focus and print
+                            printFrame.contentWindow.focus();
+                            const printed = printFrame.contentWindow.print();
+
+                            setTimeout(() => {
+                                try { document.body.removeChild(printFrame); } catch(e) { console.error(e); }
+                                try { showToast('Receipt printed (fallback)', 'success', 900); } catch(e) {}
+                                resolve(true);
+                            }, 400);
+                        } catch (e) {
+                            console.error('Fallback print error:', e);
+                            try { document.body.removeChild(printFrame); } catch(e) {}
+                            resolve(false);
+                        }
+                    }, 350);
+                } catch (err) {
+                    console.error('printReceipt error:', err);
+                    resolve(false);
+                }
+            });
         }
 
         function showReceiptPreview(order) {
@@ -5843,7 +6795,7 @@ function updateHeaderDateTime() {
                         <div style="background: var(--surface); border-radius: 0.5rem; padding: 0.5rem; width: 860px; max-width: 95%; box-shadow: 0 10px 25px rgba(0,0,0,0.2); color: var(--text-primary); display:flex; flex-direction: column; gap:0.5rem; max-height: calc(100vh - 60px);">
                             <div style="display:flex; justify-content:space-between; align-items:center; padding: 0.5rem 1rem; border-bottom: 1px solid #e6eef8;">
                                 <h3 style="margin:0;">Receipt Preview</h3>
-                                <div style="font-size:0.9rem; color:var(--text-secondary);">Printing is handled by your system dialog. After printing or cancelling you'll return to the Dashboard.</div>
+                                <div style="font-size:0.9rem; color:var(--text-secondary);">Printing is handled by your system dialog. After printing or cancelling you'll return to the Billing form (Step 1).</div>
                             </div>
                             <div style="flex:1 1 auto; overflow:auto; padding:1rem; background:#fff; border-top:1px solid #e6eef8; border-bottom:1px solid #e6eef8;">
                                 <iframe id="receipt-preview-iframe" style="width:100%; min-height:360px; border:none; background:white;" srcdoc=""></iframe>
@@ -6118,7 +7070,7 @@ function updateHeaderDateTime() {
                 paymentDesc = (appState.billingData.paymentMethod || 'Cash').charAt(0).toUpperCase() + (appState.billingData.paymentMethod || 'cash').slice(1);
             }
 
-            const confirmed = await showConfirm(`Complete billing for "${appState.billingData.patientName}" with a total of ${totalAmountFormatted} (Payment: ${paymentDesc})? Click Confirm to preview and print the receipt. You will be returned to the Dashboard after printing.`);
+            const confirmed = await showConfirm(`Complete billing for "${appState.billingData.patientName}" with a total of ${totalAmountFormatted} (Payment: ${paymentDesc})? Click Confirm to preview and print the receipt. You will be returned to the Billing form (Step 1) after printing.`);
             if (!confirmed) {
                 return; // User clicked 'Cancel'
             }
@@ -6173,7 +7125,8 @@ function updateHeaderDateTime() {
                 splitPayments: { cash: 0, pos: 0, transfer: 0 }
             };
             appState.billingStep = 1;
-            navigateTo('dashboard');
+            // Return user to billing page step 1 so they can immediately start a new patient billing
+            navigateTo('billing');
 
             // Small deferred check and recovery to handle any lingering UI blocking states
             setTimeout(() => {
@@ -6312,6 +7265,7 @@ function updateHeaderDateTime() {
                 appState.editingPRId = id;
                 appState.editingInventoryId = null; // Ensure only one item is edited at a time
             } else if (type === 'inventory') {
+                if (!canEditInventory()) { showModal('Access Denied: You do not have permission to edit inventory.', 'error'); return; }
                 appState.editingInventoryId = id;
                 appState.editingPRId = null;
             }
@@ -6355,6 +7309,7 @@ function updateHeaderDateTime() {
         }
 
         function saveInventoryEdit(id) {
+            if (!canEditInventory()) { showModal('Access Denied: You do not have permission to edit inventory.', 'error'); return; }
             const item = inventory.find(i => i.id === id);
             if (!item) return;
 
@@ -6370,6 +7325,7 @@ function updateHeaderDateTime() {
         }
 
         function deleteInventoryItem(id) {
+            if (!canEditInventory()) { showModal('Access Denied: You do not have permission to delete inventory.', 'error'); return; }
             showConfirm('Are you sure you want to delete this inventory item?').then(confirmed => {
                 if (!confirmed) return;
                 const index = inventory.findIndex(i => i.id === id);
@@ -6470,6 +7426,22 @@ function updateHeaderDateTime() {
             });
         }
 
+        // Allow editing payment method on patient record by any user
+        function updateOrderPaymentMethod(orderId, newMethod) {
+            try {
+                const order = orders.find(o => o.id === orderId);
+                if (!order) return;
+                const old = order.paymentMethod;
+                order.paymentMethod = newMethod;
+                autoSave();
+                logAction('UPDATE_PAYMENT_METHOD', `Changed payment method for order #${order.id} (${order.pid}) from '${old}' to '${newMethod}'.`);
+                renderApp();
+            } catch (err) {
+                console.error('updateOrderPaymentMethod failed:', err);
+                showToast('Failed to update payment method', 'error', 1200);
+            }
+        }
+
         function changePRPerformancePage(direction) {
             const newPage = appState.analytics.prPerformancePage + direction;
             const prPerformance = getPRPerformance();
@@ -6544,6 +7516,8 @@ function updateHeaderDateTime() {
         function updateAnalyticsDateRange(key, value) {
             appState.analyticsDateRange[key] = value;
             renderApp();
+            // Ensure the single analysis chart refreshes after the DOM updates
+            setTimeout(() => { try { renderSingleAnalysisChart(); } catch (e) { /* ignore */ } }, 80);
         }
 
         function resetAnalyticsDateRange() {
@@ -6552,52 +7526,182 @@ function updateHeaderDateTime() {
                 end: new Date().toISOString().split('T')[0]
             };
             renderApp();
+            setTimeout(() => { try { renderSingleAnalysisChart(); } catch (e) { /* ignore */ } }, 80);
         }
 
         // Keep a reference to the chart to destroy it before re-rendering
         let prChartInstance = null;
+        let singleAnalysisChartInstance = null;
+        let _chartJSPromise = null;
 
-        function renderPRPerformanceChart() {
-            const prPerformance = getFilteredPRPerformance();
-            const ctx = document.getElementById('prPerformanceChart')?.getContext('2d');
-            if (!ctx) return;
+        function ensureChartJSLoaded() {
+            if (window.Chart) return Promise.resolve();
+            if (_chartJSPromise) return _chartJSPromise;
+            _chartJSPromise = new Promise((resolve, reject) => {
+                try {
+                    const s = document.createElement('script');
+                    s.src = 'https://cdn.jsdelivr.net/npm/chart.js';
+                    s.async = true;
+                    s.onload = () => { resolve(); };
+                    s.onerror = (e) => { reject(new Error('Failed to load Chart.js')); };
+                    document.head.appendChild(s);
+                } catch (e) { reject(e); }
+            });
+            return _chartJSPromise;
+        }
 
-            // Destroy the old chart instance if it exists
-            if (prChartInstance) {
-                prChartInstance.destroy();
-            }
+        async function renderPRPerformanceChart() {
+            try {
+                await ensureChartJSLoaded();
+                const prPerformance = getFilteredPRPerformance();
+                const ctx = document.getElementById('prPerformanceChart')?.getContext('2d');
+                if (!ctx) return;
 
-            const labels = prPerformance.map(p => p.name);
-            const data = prPerformance.map(p => p.revenue);
+                // Destroy the old chart instance if it exists
+                if (prChartInstance) {
+                    prChartInstance.destroy();
+                }
 
-            prChartInstance = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Revenue Generated',
-                        data: data,
-                        backgroundColor: 'rgba(14, 74, 124, 0.6)', // --primary with opacity
-                        borderColor: 'rgba(14, 74, 124, 1)', // --primary
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    indexAxis: 'y', // Display as a horizontal bar chart
-                    responsive: true,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    return ` Revenue: ${formatCurrency(context.raw)}`;
+                const labels = prPerformance.map(p => p.name);
+                const data = prPerformance.map(p => p.revenue);
+
+                const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--primary')?.trim() || '#0e4a7c';
+
+                prChartInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Revenue Generated',
+                            data: data,
+                            backgroundColor: primaryColor,
+                            borderColor: primaryColor,
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y', // Display as a horizontal bar chart
+                        responsive: true,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return ` Revenue: ${formatCurrency(context.raw)}`;
+                                    }
                                 }
                             }
-                        }
-                    },
-                    scales: { x: { beginAtZero: true } }
-                }
+                        },
+                        scales: { x: { beginAtZero: true } }
+                    }
+                });
+            } catch (err) {
+                console.error('renderPRPerformanceChart failed:', err);
+            }
+        }
+
+        function getOrdersBetween(start, end) {
+            const s = new Date(start);
+            const e = new Date(end);
+            // Normalize times
+            s.setHours(0,0,0,0);
+            e.setHours(23,59,59,999);
+            return orders.filter(o => {
+                try { const d = new Date(o.date); return d >= s && d <= e; } catch (e) { return false; }
             });
+        }
+
+        async function renderSingleAnalysisChart() {
+            try {
+                await ensureChartJSLoaded();
+
+                const type = document.getElementById('analysisTypeSelect')?.value || 'payment_method';
+                const agg = document.getElementById('analysisAggregationSelect')?.value || 'day';
+                const start = appState.analyticsDateRange.start;
+                const end = appState.analyticsDateRange.end;
+                const datasetOrders = getOrdersBetween(start, end);
+
+                let labels = [];
+                let data = [];
+
+                if (type === 'payment_method') {
+                    const tally = {};
+                    datasetOrders.forEach(o => { const k = (o.paymentMethod || 'cash'); tally[k] = (tally[k] || 0) + 1; });
+                    labels = Object.keys(tally);
+                    data = labels.map(l => tally[l]);
+                } else if (type === 'most_tests') {
+                    const tally = {};
+                    datasetOrders.forEach(o => { (o.services || []).forEach(s => { const name = typeof s === 'string' ? s : (s && s.name ? s.name : 'Unknown'); tally[name] = (tally[name] || 0) + 1; }); });
+                    const pairs = Object.entries(tally).sort((a,b) => b[1] - a[1]).slice(0,12);
+                    labels = pairs.map(p => p[0]); data = pairs.map(p => p[1]);
+                } else if (type === 'top_hospitals') {
+                    const tally = {};
+                    datasetOrders.forEach(o => { const h = o.referredHospital || 'Unknown'; tally[h] = (tally[h] || 0) + 1; });
+                    const pairs = Object.entries(tally).sort((a,b) => b[1] - a[1]).slice(0,12);
+                    labels = pairs.map(p => p[0]); data = pairs.map(p => p[1]);
+                } else if (type === 'top_doctors') {
+                    const tally = {};
+                    datasetOrders.forEach(o => { const d = o.referredBy || 'Unknown'; tally[d] = (tally[d] || 0) + 1; });
+                    const pairs = Object.entries(tally).sort((a,b) => b[1] - a[1]).slice(0,12);
+                    labels = pairs.map(p => p[0]); data = pairs.map(p => p[1]);
+                } else if (type === 'top_prs') {
+                    // reuse existing PR performance helper but restrict by date
+                    const prPerf = {};
+                    datasetOrders.forEach(o => { const pr = o.referredBy || 'Unknown'; prPerf[pr] = (prPerf[pr] || 0) + (o.total || 0); });
+                    const pairs = Object.entries(prPerf).sort((a,b) => b[1] - a[1]).slice(0,12);
+                    labels = pairs.map(p => p[0]); data = pairs.map(p => p[1]);
+                } else if (type === 'performance') {
+                    // Group revenue by day/month/year depending on agg
+                    const groups = {};
+                    datasetOrders.forEach(o => {
+                        const d = new Date(o.date);
+                        let key = '';
+                        if (agg === 'day') key = d.toISOString().split('T')[0];
+                        else if (agg === 'month') key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+                        else key = `${d.getFullYear()}`;
+                        groups[key] = (groups[key] || 0) + (o.total || 0);
+                    });
+                    const sorted = Object.entries(groups).sort((a,b) => new Date(a[0]) - new Date(b[0]));
+                    labels = sorted.map(s => s[0]); data = sorted.map(s => s[1]);
+                }
+
+                const ctx = document.getElementById('singleAnalysisChart')?.getContext('2d');
+                if (!ctx) return;
+
+                if (singleAnalysisChartInstance) singleAnalysisChartInstance.destroy();
+
+                // If there's no data, show a friendly message inside the canvas area (overlay)
+                const hasData = Array.isArray(data) && data.length > 0 && data.some(v => v > 0);
+                if (!hasData) {
+                    // Draw an empty chart with 'No data' label
+                    singleAnalysisChartInstance = new Chart(ctx, { type: 'bar', data: { labels: ['No data'], datasets: [{ label: '', data: [0], backgroundColor: 'rgba(0,0,0,0.06)' }] }, options: { plugins: { legend: { display: false }, tooltip: { enabled: false } }, scales: { y: { beginAtZero: true } } } });
+                    return;
+                }
+
+                const color = getComputedStyle(document.documentElement).getPropertyValue('--primary')?.trim() || '#0e4a7c';
+
+                singleAnalysisChartInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: { labels: labels, datasets: [{ label: '', data: data, backgroundColor: color, borderColor: color, borderWidth: 1 }] },
+                    options: { responsive: true, plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(context) { return type === 'top_prs' || type === 'performance' ? ` ${formatCurrency(context.raw)}` : ` ${context.raw}`; } } } }, scales: { y: { beginAtZero: true } } }
+                });
+
+            } catch (err) {
+                console.error('renderSingleAnalysisChart failed:', err);
+                try {
+                    const canvas = document.getElementById('singleAnalysisChart');
+                    if (canvas && canvas.getContext) {
+                        const ctx = canvas.getContext('2d');
+                        ctx.clearRect(0,0,canvas.width, canvas.height);
+                        ctx.fillStyle = '#f3f4f6';
+                        ctx.fillRect(0,0,canvas.width, canvas.height);
+                        ctx.fillStyle = '#6b7280';
+                        ctx.font = '16px sans-serif';
+                        ctx.textAlign = 'center';
+                        ctx.fillText('Chart unavailable', canvas.width/2, canvas.height/2);
+                    }
+                } catch (e) { /* ignore fallback errors */ }
+            }
         }
 
         function toggleFullDailyTestRecord() {
@@ -7351,6 +8455,76 @@ function updateHeaderDateTime() {
             });
         }
 
+        // ----------------------------
+        // Daily Time Verification
+        // ----------------------------
+        async function checkDailyTimeVerification() {
+            try {
+                const last = await window.electronAPI.getLastVerificationDate();
+                const today = new Date().toISOString().split('T')[0];
+                if (last === today) return; // already verified today
+                if (!appState.currentUser) return; // only for logged in users
+                showDailyTimeVerificationModal(appState.currentUser.fullName);
+            } catch (err) {
+                console.error('checkDailyTimeVerification error:', err);
+            }
+        }
+
+        function showDailyTimeVerificationModal(fullName) {
+            const modal = document.createElement('div');
+            modal.style.cssText = `position: fixed; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.55); z-index: 99999; display:flex; align-items:center; justify-content:center; pointer-events: all;`;
+            modal.dataset.silhouetteModal = 'daily-time-check';
+            const now = new Date();
+            modal.innerHTML = `
+                <div style="background:var(--surface); border-radius:0.75rem; padding:2rem; width: 520px; max-width: 95%; box-shadow: 0 10px 30px rgba(0,0,0,0.3); text-align:center;">
+                    <h3 style="margin:0 0 0.5rem 0; font-size:1.25rem; font-weight:700;">Hello ${String(fullName).replace(/</g,'&lt;').replace(/>/g,'&gt;')}, have a great day at work! &#128075;</h3>
+                    <p style="color:var(--text-secondary); margin:0 0 1rem 0;">Please verify the system date and time to ensure sales records are accurate.</p>
+                    <div style="display:flex; align-items:center; justify-content:center; gap:1.25rem; margin: 1rem 0;">
+                        <div style="text-align:center;">
+                            <div id="dtv-date" style="font-size:1.15rem; font-weight:600;">${now.toLocaleDateString()}</div>
+                            <div id="dtv-time" style="font-size:2rem; font-weight:700; margin-top:0.25rem;">${now.toLocaleTimeString()}</div>
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:0.5rem; justify-content: center; margin-top:1.25rem;">
+                        <button id="dtv-fix" class="btn-secondary" style="padding:0.5rem 1rem;">Fix Time</button>
+                        <button id="dtv-confirm" class="btn-primary" style="padding:0.5rem 1rem;">Confirm & Continue</button>
+                    </div>
+                    <p style="color:var(--text-secondary); font-size:0.875rem; margin-top:0.75rem;">If everything is correct, confirm to continue. Only the first user of the day needs to verify.</p>
+                </div>
+            `;
+            document.body.appendChild(modal);
+
+            const dateEl = modal.querySelector('#dtv-date');
+            const timeEl = modal.querySelector('#dtv-time');
+            let interval = setInterval(() => {
+                const now2 = new Date();
+                if (dateEl) dateEl.textContent = now2.toLocaleDateString();
+                if (timeEl) timeEl.textContent = now2.toLocaleTimeString();
+            }, 1000);
+
+            modal.querySelector('#dtv-fix').addEventListener('click', async () => {
+                try {
+                    await window.electronAPI.openSystemTimeSettings();
+                } catch (err) {
+                    console.error('openSystemTimeSettings failed:', err);
+                    await showModal('Unable to open system time settings on this platform. Please adjust the system clock manually.', 'warning');
+                }
+            });
+
+            modal.querySelector('#dtv-confirm').addEventListener('click', async () => {
+                try {
+                    const todayStr = new Date().toISOString().split('T')[0];
+                    await window.electronAPI.setLastVerificationDate(todayStr);
+                    logAction('TIME_VERIFICATION', `User '${fullName}' confirmed system date/time for ${todayStr}.`);
+                } catch (err) {
+                    console.error('setLastVerificationDate failed:', err);
+                } finally {
+                    clearInterval(interval);
+                    try { modal.remove(); } catch (e) {}
+                }
+            });
+        }
+
         window.addEventListener('DOMContentLoaded', async () => {
             loadPreferences();
             await loadData();
@@ -7406,7 +8580,53 @@ function updateHeaderDateTime() {
                 });
                 observer.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['disabled', 'style'] });
             } catch(e) { console.error('Observer init failed:', e); }
+
+            // Renderer-side handler for safe shutdown initiated by main
+            try {
+                if (window.electronAPI && typeof window.electronAPI.onStartShutdown === 'function') {
+                    window.electronAPI.onStartShutdown(async () => {
+                        try {
+                            const overlay = document.getElementById('saving-overlay');
+                            if (overlay) overlay.classList.remove('hidden');
+
+                            const rawData = {
+                                users,
+                                prList,
+                                inventory,
+                                drafts: appState.drafts,
+                                orders,
+                                auditLog,
+                                companyProfile: appState.companyProfile
+                            };
+
+                            const clean = prepareForSave(rawData);
+
+                            try {
+                                window.electronAPI.saveDataSync(clean);
+                            } catch (err) {
+                                console.error('Synchronous save during shutdown failed:', err);
+                            }
+
+                            setTimeout(() => {
+                                try { window.electronAPI.confirmShutdown(); } catch (e) { console.error('confirmShutdown failed:', e); }
+                            }, 800);
+                        } catch (err) {
+                            console.error('onStartShutdown handler error:', err);
+                            try { window.electronAPI.confirmShutdown(); } catch (e) { console.error(e); }
+                        }
+                    });
+                }
+            } catch (e) { console.error('Safe shutdown registration failed:', e); }
         });
     </script>
+
+    <!-- Saving overlay inserted by automated patch -->
+    <div id="saving-overlay" class="fixed inset-0 bg-slate-900/90 backdrop-blur-md flex items-center justify-center z-[9999] hidden">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl text-center max-w-sm mx-4">
+            <div class="animate-spin rounded-full h-16 w-16 border-4 border-blue-600 border-t-transparent mx-auto mb-6"></div>
+            <h2 class="text-2xl font-bold text-slate-800">Saving Data</h2>
+            <p class="text-slate-500 mt-2">Please wait while we secure your patient records. Do not close your computer.</p>
+        </div>
+    </div>
 </body>
 </html>

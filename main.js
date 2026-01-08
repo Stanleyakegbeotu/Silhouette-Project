@@ -3,6 +3,9 @@ const path = require("path");
 const fs = require("fs");
 const Store = require("electron-store").default;
 
+// Flag to indicate user/renderer has confirmed it's safe to quit
+let isActuallyQuitting = false;
+
 function createWindow() {
   const mainWindow = new BrowserWindow({
     width: 1400,
@@ -15,6 +18,14 @@ function createWindow() {
   });
 
   mainWindow.loadFile("index.html");
+
+  // Intercept the window close so renderer can perform a blocking save first
+  mainWindow.on('close', (e) => {
+    if (!isActuallyQuitting) {
+      e.preventDefault();
+      mainWindow.webContents.send('start-safe-shutdown');
+    }
+  });
 }
 
 app.whenReady().then(createWindow);
@@ -56,6 +67,25 @@ ipcMain.handle("save-data", async (event, data) => {
     console.error("Failed to save sanitized data:", error);
     return { success: false, error: error.message };
   }
+});
+
+// Synchronous save handler: used during beforeunload/close to ensure
+// the renderer can block until the write completes.
+ipcMain.on("save-data-sync", (event, data) => {
+  try {
+    const clean = JSON.parse(JSON.stringify(data));
+    store.set("appData", clean);
+    event.returnValue = true;
+  } catch (error) {
+    console.error("Synchronous save failed:", error);
+    event.returnValue = false;
+  }
+});
+
+// Renderer confirms it is OK to finalize shutdown
+ipcMain.on("confirm-shutdown", () => {
+  isActuallyQuitting = true;
+  app.quit();
 });
 
 // ----------------------------
