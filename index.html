@@ -118,8 +118,87 @@
         .responsive-table-wrapper.scrollable-daily-log th,
         .responsive-table-wrapper.scrollable-daily-log td {
             white-space: nowrap;
-            vertical-align: middle;
         }
+
+        /* Immersive header styles */
+        #immersive-sensor {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 20px; /* trigger area - expanded for easier access */
+            z-index: 100000; /* above most UI elements */
+            pointer-events: auto;
+            background: transparent;
+        }
+
+        #immersive-header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            transform: translateY(-100%);
+            transition: transform 260ms ease-out;
+            z-index: 100001; /* ensure header sits above sensor and modals */
+            pointer-events: auto;
+        }
+
+        #immersive-header.visible {
+            transform: translateY(0);
+        }
+
+        .immersive-bar {
+            -webkit-backdrop-filter: blur(6px);
+            backdrop-filter: blur(6px);
+            background: rgba(255,255,255,0.62);
+            border-bottom: 1px solid rgba(0,0,0,0.06);
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 12px;
+        }
+
+        .drag-region {
+            -webkit-user-select: none;
+            user-select: none;
+            cursor: default;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        @supports (-webkit-app-region: drag) {
+            .drag-region {
+                -webkit-app-region: drag;
+            }
+        }
+
+        .window-controls button {
+            background: transparent;
+            border: none;
+            width: 40px;
+            height: 34px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+            cursor: pointer;
+            color: var(--text-primary);
+            font-size: 14px;
+        }
+
+        @supports (-webkit-app-region: no-drag) {
+            .window-controls button {
+                -webkit-app-region: no-drag;
+            }
+        }
+
+        .window-controls button:hover { background: rgba(0,0,0,0.06); }
+
+        .window-controls button.close { color: var(--error); }
         .responsive-table-wrapper.scrollable-daily-log td.services-cell {
             white-space: normal; /* allow services to wrap */
             max-width: 380px;
@@ -142,6 +221,20 @@
         .toast, .floating-action { max-width: calc(100% - 40px); }
         /* Tables may still be wide: allow horizontal scroll within their container */
         .table { width: 100%; }
+
+        /* Scrollable Card Tables - Limit to 10 rows with scroll */
+        .card-table-wrapper { overflow: auto; max-height: calc((2.5rem * 10) + 50px); overflow-x: auto; overflow-y: auto; border: 1px solid var(--border); border-radius: 0.5rem; -webkit-user-select: none; user-select: none; }
+        .card-table-wrapper table { margin: 0; }
+        .card-table-wrapper table tbody tr { height: 2.5rem; cursor: pointer; transition: background-color 0.15s; }
+        .card-table-wrapper table tbody tr:hover { background-color: var(--background); }
+        .card-table-wrapper table tbody tr.row-selected { background-color: rgba(14, 74, 124, 0.15); border-left: 3px solid var(--primary); }
+        .card-table-wrapper thead { position: sticky; top: 0; background: var(--background); z-index: 10; }
+
+        /* Alternative wrapper for non-card tables (History, Records pages) */
+        .responsive-table-wrapper, .scrollable-daily-log { -webkit-user-select: none; user-select: none; }
+        .responsive-table-wrapper table tbody tr, .scrollable-daily-log table tbody tr { cursor: pointer; transition: background-color 0.15s; }
+        .responsive-table-wrapper table tbody tr:hover, .scrollable-daily-log table tbody tr:hover { background-color: var(--background); }
+        .responsive-table-wrapper table tbody tr.row-selected, .scrollable-daily-log table tbody tr.row-selected { background-color: rgba(14, 74, 124, 0.15); border-left: 3px solid var(--primary); }
 
 
         body {
@@ -252,11 +345,20 @@
             border-radius: 0.5rem;
             cursor: pointer;
             font-weight: 500;
-            transition: background-color 0.2s;
+            transition: background-color 0.2s, box-shadow 0.2s, transform 0.1s;
+            box-shadow: 0 4px 12px rgba(14, 74, 124, 0.15);
+            border: none;
         }
 
         .btn-primary:hover {
             background-color: var(--primary-light);
+            box-shadow: 0 6px 16px rgba(14, 74, 124, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 8px rgba(14, 74, 124, 0.15);
         }
 
         .btn-secondary {
@@ -267,10 +369,18 @@
             border-radius: 0.5rem;
             cursor: pointer;
             transition: all 0.2s;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
         }
 
         .btn-secondary:hover {
             background-color: var(--background);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary:active {
+            transform: translateY(0);
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
         }
 
         .card {
@@ -299,6 +409,9 @@
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
             border-radius: 0.75rem;
             transition: all 0.3s;
+            position: sticky;
+            top: 0;
+            z-index: 100;
         }
         
 
@@ -359,41 +472,75 @@
             background: linear-gradient(135deg, var(--accent) 0%, var(--accent-light) 100%);
         }
 
+        /* ===== MODERN SIDEBAR REDESIGN ===== */
         .sidebar {
             position: fixed;
             left: 0;
             top: 0;
-            width: 280px;
+            width: 16rem; /* w-64 */
             height: 100vh;
-            background-color: var(--sidebar-bg);
+            background-color: var(--primary);
             color: white;
-            padding: 1.5rem 1rem;
+            padding: 1.5rem 0.75rem;
             overflow-y: auto;
-            transition: width 0.3s, transform 0.3s;
+            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             z-index: 1000;
-            box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15);
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            flex-direction: column;
         }
 
         .sidebar.collapsed {
-            width: 80px;
+            width: 5rem; /* w-20 */
         }
 
         .sidebar-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 2rem;
-            padding-bottom: 1rem;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            margin-bottom: 1.5rem;
+            padding: 0.75rem;
+            gap: 0.75rem;
         }
 
         .sidebar-logo {
-            font-size: 1.25rem;
-            font-weight: 700;
-            transition: opacity 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            flex-shrink: 0;
         }
 
-        .sidebar.collapsed .sidebar-logo {
+        .sidebar-logo-icon {
+            background-color: rgba(255, 255, 255, 0.2);
+            color: white;
+            width: 2rem;
+            height: 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 0.75rem;
+            font-size: 1.25rem;
+            font-weight: 700;
+            flex-shrink: 0;
+            cursor: pointer;
+            transition: transform 0.2s, background-color 0.2s;
+        }
+
+        .sidebar-logo-icon:hover {
+            background-color: rgba(255, 255, 255, 0.3);
+            transform: scale(1.1);
+        }
+
+        .sidebar-logo-text {
+            font-weight: 900;
+            font-size: 1.125rem;
+            color: white;
+            transition: opacity 0.3s, visibility 0.3s;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+
+        .sidebar.collapsed .sidebar-logo-text {
             opacity: 0;
             visibility: hidden;
             width: 0;
@@ -405,57 +552,83 @@
             color: white;
             cursor: pointer;
             font-size: 1.25rem;
-            padding: 0.25rem;
+            padding: 0.5rem;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: transform 0.2s;
+            transition: transform 0.2s, color 0.2s;
+            border-radius: 0.5rem;
+            flex-shrink: 0;
         }
 
         .sidebar-toggle:hover {
             transform: scale(1.1);
+            color: rgba(255, 255, 255, 0.8);
         }
 
         .sidebar-nav {
             display: flex;
             flex-direction: column;
-            gap: 0.5rem;
+            gap: 0.75rem;
+            flex: 1;
+            overflow-y: auto;
+            padding: 0 0.25rem;
         }
 
+        /* NAV ITEM CARD BASE STYLES */
         .nav-item {
             display: flex;
             align-items: center;
-            gap: 1rem;
-            padding: 0.75rem 1rem;
+            gap: 0.75rem;
+            padding: 0.875rem 1rem;
             cursor: pointer;
-            border-radius: 0.5rem;
-            color: rgba(255, 255, 255, 0.8);
-            transition: all 0.2s;
+            border-radius: 1.125rem; /* rounded-[18px] */
+            color: var(--primary);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             text-decoration: none;
             font-size: 0.95rem;
+            font-weight: 500;
             white-space: nowrap;
+            border: none;
+            background-color: white;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            position: relative;
         }
 
-        .nav-item:hover {
-            background-color: rgba(255, 255, 255, 0.1);
-            color: white;
+        /* INACTIVE/DEFAULT HOVER STATE */
+        .nav-item:hover:not(.active) {
+            background-color: white;
+            color: var(--primary);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(14, 74, 124, 0.2);
         }
 
+        /* ACTIVE STATE */
         .nav-item.active {
-            background-color: rgba(255, 255, 255, 0.15);
-            color: white;
+            background-color: white;
+            color: var(--primary);
+            transform: scale(1.02);
+            box-shadow: 0 8px 16px rgba(255, 255, 255, 0.3);
+            outline: 2px solid rgba(255, 255, 255, 0.5);
+            outline-offset: 2px;
         }
 
         .nav-item-icon {
-            font-size: 1.25rem;
-            min-width: 1.5rem;
+            font-size: 1.375rem;
+            min-width: 1.75rem;
+            width: 1.75rem;
+            height: 1.75rem;
             display: flex;
             align-items: center;
             justify-content: center;
+            flex-shrink: 0;
         }
 
         .nav-item-label {
-            transition: opacity 0.3s;
+            transition: opacity 0.3s, visibility 0.3s;
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .sidebar.collapsed .nav-item-label {
@@ -464,19 +637,126 @@
             width: 0;
         }
 
+        /* TOOLTIP FOR COLLAPSED STATE */
+        .nav-item-tooltip {
+            position: absolute;
+            left: 100%;
+            top: 50%;
+            transform: translateY(-50%);
+            margin-left: 0.75rem;
+            background-color: rgb(30, 41, 59);
+            color: white;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+            z-index: 1001;
+            box-shadow: 0 10px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .sidebar.collapsed .nav-item:hover .nav-item-tooltip {
+            opacity: 1;
+        }
+
         .sidebar-footer {
             margin-top: auto;
-            padding-top: 1rem;
+            padding-top: 0.75rem;
             border-top: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .sidebar-footer .nav-item {
+            background-color: #ef4444;
+            color: white;
+            margin: 0;
+        }
+
+        .sidebar-footer .nav-item:hover:not(.active) {
+            background-color: #dc2626;
+            color: white;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 4px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        /* Login form panel scrolling */
+        .login-form-panel {
+            overflow-y: auto;
+            max-height: 100%;
+        }
+
+        .login-form-panel::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .login-form-panel::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.05);
+            border-radius: 10px;
+        }
+
+        .login-form-panel::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.15);
+            border-radius: 10px;
+        }
+
+        .login-form-panel::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 0, 0, 0.25);
+        }
+
+        /* Custom scrollbar styling */
+        .sidebar-nav::-webkit-scrollbar,
+        .sidebar-footer::-webkit-scrollbar,
+        .nav-item-label::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .sidebar-nav::-webkit-scrollbar-track,
+        .sidebar-footer::-webkit-scrollbar-track,
+        .nav-item-label::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+
+        .sidebar-nav::-webkit-scrollbar-thumb,
+        .sidebar-footer::-webkit-scrollbar-thumb,
+        .nav-item-label::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+        }
+
+        .sidebar-nav::-webkit-scrollbar-thumb:hover,
+        .sidebar-footer::-webkit-scrollbar-thumb:hover,
+        .nav-item-label::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.5);
         }
 
         .main-container {
-            margin-left: 280px;
-            transition: margin-left 0.3s;
+            margin-left: 16rem; /* w-64 */
+            transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .main-container.sidebar-collapsed {
-            margin-left: 80px;
+            margin-left: 5rem; /* w-20 */
         }
 
         .main-content {
@@ -501,13 +781,14 @@
             border-radius: 0.5rem;
             font-size: 0.95rem;
             font-family: inherit;
-            transition: border-color 0.2s;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
         }
 
         .form-input:focus, .form-select:focus, .form-textarea:focus {
             outline: none;
             border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(14, 74, 124, 0.1);
+            box-shadow: 0 0 0 3px rgba(14, 74, 124, 0.1), 0 2px 12px rgba(0, 0, 0, 0.12);
         }
 
         .form-textarea {
@@ -647,6 +928,13 @@
         @media (max-width: 1024px) {
             .grid-2, .grid-3 {
                 grid-template-columns: 1fr;
+            }
+            /* Make tables more responsive on narrow/square screens (19" monitors) */
+            .responsive-table-wrapper.scrollable-daily-log table {
+                min-width: 900px; /* Reduced from 1100px for better fit on 1280px width */
+            }
+            .responsive-table-wrapper.scrollable-daily-log {
+                max-height: 60vh; /* Reduce height to accommodate shorter screens */
             }
         }
 
@@ -833,6 +1121,16 @@
             transition: all 0.2s;
             background-color: var(--surface);
         }
+            /* 3D flip card styles */
+            .flip-scene { perspective: 1400px; }
+            .flip-card-inner { transform-style: preserve-3d; transition: transform 900ms cubic-bezier(.2,.9,.2,1); }
+            .flip-card-inner.flipped { transform: rotateY(180deg); }
+            .flip-face { backface-visibility: hidden; position: absolute; inset: 0; }
+            .flip-front { position: relative; }
+            .flip-back { transform: rotateY(180deg); display: flex; align-items: center; justify-content: center; border: 1px solid rgba(255,255,255,0.9); }
+            /* Toggle link/text under the action button */
+            .login-toggle-text { color: var(--primary); font-weight: 600; }
+            .login-toggle-text a { color: var(--primary); font-weight: 700; text-decoration: underline; }
 
         .theme-option:hover {
             border-color: var(--primary);
@@ -916,19 +1214,33 @@
 
         /* Print-specific styles */
         @media print {
-            body * {
-                visibility: hidden;
-            }
-            #printable-area, #printable-area * {
+            /* Hide everything by default, show only receipt content to avoid clipping */
+            body * { visibility: hidden; font-weight: normal !important; font-style: normal !important; }
+            #receipt-content, #receipt-content * {
                 visibility: visible;
+                font-weight: normal !important; /* Force normal/thin weight for print */
+                text-transform: none !important;
+                font-style: normal !important;
             }
-            #printable-area {
-                position: absolute;
-                left: 0;
-                top: 0;
-                width: 100%;
+            /* Receipt container sizing safe for 80mm paper but narrower to avoid edge clipping */
+            .receipt-container, #receipt-content {
+                position: relative !important;
+                left: 0 !important;
+                top: 0 !important;
+                width: 72mm !important;
+                max-width: 72mm !important;
+                box-sizing: border-box !important;
+                padding: 4mm !important;
+                overflow-wrap: break-word !important;
             }
+            .receipt-row { display: flex !important; justify-content: space-between !important; width: 100% !important; word-break: break-word !important; word-wrap: break-word !important; }
+            .receipt-value { width: 58% !important; text-align: right !important; overflow-wrap: break-word !important; word-wrap: break-word !important; }
+            /* Ensure small text doesn't wrap the right edge */
+            .receipt-container * { box-sizing: border-box !important; }
         }
+
+        /* Hiding mechanism for overlay - ensures it takes 0 pixels when hidden */
+        #saving-overlay.hidden { display: none !important; visibility: hidden !important; }
 
         .autocomplete-box {
   position: absolute;
@@ -938,11 +1250,22 @@
   background: #fff;
   border: 1px solid #ddd;
   border-radius: 8px;
-  max-height: 220px;
+  max-height: min(220px, 30vh);
   overflow-y: auto;
   z-index: 999;
   display: none;
 }
+
+/* Thin, unobtrusive scrollbar for constrained monitors (e.g., 19" square) */
+*::-webkit-scrollbar { width: 6px; height: 6px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 6px; }
+*::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.18); }
+
+/* Ensure main panels scroll internally and avoid fixed pixel heights */
+.login-form-panel, .sidebar-nav, .main-content, .card, .receipt-container { overflow-y: auto; }
+.login-form-panel { max-height: 85vh; min-height: 500px; }
+.main-content { max-width: 1280px; margin-left: auto; margin-right: auto; }
 
 .autocomplete-item {
   padding: 10px 14px;
@@ -958,7 +1281,97 @@
     </style>
 </head>
 <body>
+    <!-- Immersive Header Sensor (top 2px) -->
+    <div id="immersive-sensor" aria-hidden="true"></div>
+
+    <!-- Immersive Header (auto-hides off-screen) -->
+    <div id="immersive-header" aria-hidden="true">
+        <div class="immersive-bar">
+            <div class="drag-region">Silhouette Management System</div>
+            <div class="window-controls" role="toolbar" aria-label="Window Controls">
+                <button id="minimize-btn" title="Minimize" aria-label="Minimize">—</button>
+                <button id="maximize-btn" title="Maximize" aria-label="Maximize">▢</button>
+                <button id="close-btn" title="Close" aria-label="Close" class="close">✕</button>
+            </div>
+        </div>
+    </div>
+
     <div id="app"></div>
+
+    <script>
+        // Immersive header interactions: show when cursor at top, wire window controls
+        (function(){
+            try {
+                const sensor = document.getElementById('immersive-sensor');
+                const header = document.getElementById('immersive-header');
+                if (!sensor || !header) return;
+
+                let hideTimer = null;
+                let isHeaderHovered = false;
+
+                function showHeader(){
+                    header.classList.add('visible');
+                    header.setAttribute('aria-hidden','false');
+                    if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+                }
+
+                function scheduleHide(delay = 1200){
+                    if (hideTimer) clearTimeout(hideTimer);
+                    // Only hide if we're not hovering over the header
+                    if (!isHeaderHovered) {
+                        hideTimer = setTimeout(()=>{
+                            if (!isHeaderHovered) {
+                                header.classList.remove('visible');
+                                header.setAttribute('aria-hidden','true');
+                            }
+                        }, delay);
+                    }
+                }
+
+                // Sensor: top 15px trigger zone
+                sensor.addEventListener('mouseenter', showHeader);
+                sensor.addEventListener('mouseleave', ()=> scheduleHide(1200));
+
+                // Header: keep visible while hovering
+                header.addEventListener('mouseenter', ()=> {
+                    isHeaderHovered = true;
+                    showHeader();
+                });
+                header.addEventListener('mouseleave', ()=> {
+                    isHeaderHovered = false;
+                    scheduleHide(600);
+                });
+
+                // Global mousemove: aggressive edge detection (top 20px)
+                document.addEventListener('mousemove', (e)=>{
+                    if (e.clientY <= 20) {
+                        showHeader();
+                    }
+                });
+
+                // Window control wiring (safe guards for non-electron env)
+                const minBtn = document.getElementById('minimize-btn');
+                const maxBtn = document.getElementById('maximize-btn');
+                const closeBtn = document.getElementById('close-btn');
+                if (minBtn) minBtn.addEventListener('click', ()=> { try { window.electronAPI.minimizeApp(); } catch(e) {} });
+                if (maxBtn) maxBtn.addEventListener('click', ()=> { try { window.electronAPI.maximizeApp(); } catch(e) {} });
+                if (closeBtn) closeBtn.addEventListener('click', ()=> { try { window.electronAPI.closeApp(); } catch(e) {} });
+
+                // Double-click drag region toggles maximize
+                const dragRegion = document.querySelector('.drag-region');
+                if (dragRegion) dragRegion.addEventListener('dblclick', ()=> { try { window.electronAPI.maximizeApp(); } catch(e) {} });
+
+                // Hide header when window loses focus
+                window.addEventListener('blur', ()=> { 
+                    header.classList.remove('visible');
+                    header.setAttribute('aria-hidden','true');
+                    isHeaderHovered = false;
+                });
+
+            } catch (err) { console.error('Immersive header init error', err); }
+        })();
+
+    </script>
 
     <script>
         // ====== APPLICATION STATE & MOCK DATA ======
@@ -1018,6 +1431,9 @@
                 searchAllRecords: false // To toggle between daily and all-time record search
             }
         }; 
+        // Desktop environment detection (Electron preload API)
+        const isDesktop = !!(window.electronAPI && typeof window.electronAPI.loadData === 'function');
+
         appState.analyticsDateRange = {
             start: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0],
             end: new Date().toISOString().split('T')[0]
@@ -1787,82 +2203,72 @@ async function safeSaveData({ blocking = false, reason = '' } = {}) {
             return false;
         }
 
-        // Best-effort backup step (non-interactive). We try a few known electronAPI names
-        try {
-            if (window.electronAPI && typeof window.electronAPI.createBackup === 'function') {
-                // createBackup() should copy existing file to a timestamped backup (main-process)
-                console.info('Attempting automatic backup via electronAPI.createBackup()');
-                await window.electronAPI.createBackup();
-            } else if (window.electronAPI && typeof window.electronAPI.backupData === 'function' && window.electronAPI.backupData.length === 0) {
-                // If backupData accepts no args and is used earlier for dialog-based backup, call it.
-                console.info('Attempting automatic backup via electronAPI.backupData() (best-effort)');
-                // NOTE: some implementations will open a dialog; we prefer non-modal, so call in try/catch
-                try { await window.electronAPI.backupData({ silent: true }); } catch (e) { /* ignore dialog-based or unsupported options */ }
-            } else {
-                // No main-process automatic backup available; store last-good locally
-                console.info('No automatic backup API found; writing localStorage fallback backup');
-                try { localStorage.setItem('sdc_lastLocalBackup', JSON.stringify(cleanData)); } catch (e) { console.warn('local backup failed', e); }
-            }
-        } catch (e) {
-            // Backup attempt failed. Log but continue — we must not block save here.
-            console.warn('Automatic backup attempt failed (non-fatal):', e);
-            try { localStorage.setItem('sdc_lastLocalBackup', JSON.stringify(cleanData)); } catch (err) {}
-        }
+        // Best-effort backup + save step. Use IPC only on desktop; otherwise fall back to localStorage/mock
+        if (isDesktop) {
+                // Desktop: attempt to call electron APIs (if available) for backup and save
+                try {
+                    if (window.electronAPI && typeof window.electronAPI.createBackup === 'function') {
+                        console.info('Attempting automatic backup via electronAPI.createBackup()');
+                        await window.electronAPI.createBackup();
+                    } else if (window.electronAPI && typeof window.electronAPI.backupData === 'function' && window.electronAPI.backupData.length === 0) {
+                        console.info('Attempting automatic backup via electronAPI.backupData() (best-effort)');
+                        try { await window.electronAPI.backupData({ silent: true }); } catch (e) { /* ignore dialog-based or unsupported options */ }
+                    } else {
+                        console.info('No automatic backup API found; writing localStorage fallback backup');
+                        try { localStorage.setItem('sdc_lastLocalBackup', JSON.stringify(cleanData)); } catch (e) { console.warn('local backup failed', e); }
+                    }
+                } catch (e) {
+                    console.warn('Automatic backup attempt failed (non-fatal):', e);
+                    try { localStorage.setItem('sdc_lastLocalBackup', JSON.stringify(cleanData)); } catch (err) {}
+                }
 
-        // Attempt to save via the existing electron API
-        let saveSuccess = false;
-        let saveAttempts = 0;
-        while (!saveSuccess && saveAttempts < 3) {
-            saveAttempts++;
-            try {
-                if (window.electronAPI && typeof window.electronAPI.saveData === 'function') {
-                    // Primary method (async)
-                    await window.electronAPI.saveData(cleanData);
-                } else if (window.electronAPI && typeof window.electronAPI.saveDataSync === 'function') {
-                    // If a sync API is exposed by main, prefer it for blocking saves
+                // Attempt to save via electronAPI where available. Retry a few times on failure.
+                let saveSuccess = false;
+                let saveAttempts = 0;
+                while (!saveSuccess && saveAttempts < 3) {
+                    saveAttempts++;
+                    try {
+                        if (window.electronAPI && typeof window.electronAPI.saveData === 'function') {
+                            await window.electronAPI.saveData(cleanData);
+                        } else if (window.electronAPI && typeof window.electronAPI.saveDataSync === 'function') {
+                            if (blocking) window.electronAPI.saveDataSync(cleanData);
+                            else await window.electronAPI.saveDataSync(cleanData);
+                        } else {
+                            console.warn('No electronAPI.saveData available - writing localStorage fallback (non-ideal)');
+                            try { localStorage.setItem('sdc_lastLocalBackup', JSON.stringify(cleanData)); } catch (e) { console.error('localStorage fallback failed', e); throw e; }
+                        }
+
+                        // Optionally verify by reloading if API exists
+                        if (window.electronAPI && typeof window.electronAPI.loadData === 'function') {
+                            const reloaded = await window.electronAPI.loadData();
+                            if (reloaded && (Array.isArray(reloaded.orders) || Array.isArray(reloaded.inventory))) {
+                                saveSuccess = true;
+                            } else {
+                                console.warn('Post-save verification: reloaded data looks empty or malformed -> retrying', reloaded);
+                                await new Promise(r => setTimeout(r, 160));
+                            }
+                        } else {
+                            saveSuccess = true;
+                        }
+                    } catch (err) {
+                        console.error('save attempt failed (will retry up to 3):', err);
+                        await new Promise(r => setTimeout(r, 180));
+                    }
+                }
+
+                if (!saveSuccess) {
+                    console.error('All save attempts failed. A local backup has been stored for recovery.');
+                    try { localStorage.setItem('sdc_lastLocalBackup', JSON.stringify(cleanData)); } catch (e) {}
                     if (blocking) {
-                        window.electronAPI.saveDataSync(cleanData);
-                    } else {
-                        // Best-effort to not block the event loop
-                        await window.electronAPI.saveDataSync(cleanData);
+                        await showModal('Failed to save data to disk. A local recovery backup was created. Please check application logs. Logging out or closing is blocked to prevent data loss.', 'error');
                     }
-                } else {
-                    // No disk API present — as a last resort persist to localStorage (non-destructive)
-                    console.warn('No electronAPI.saveData available - writing localStorage fallback (non-ideal)');
-                    try { localStorage.setItem('sdc_lastLocalBackup', JSON.stringify(cleanData)); } catch (e) { console.error('localStorage fallback failed', e); throw e; }
+                    return false;
                 }
-
-                // VERIFY: re-load data and check critical parts are present (orders array is preserved)
-                if (window.electronAPI && typeof window.electronAPI.loadData === 'function') {
-                    const reloaded = await window.electronAPI.loadData();
-                    if (reloaded && (Array.isArray(reloaded.orders) || Array.isArray(reloaded.inventory))) {
-                        // Basic consistency check: ensure we didn't regress (same or more orders usually)
-                        // We don't strictly require equality because merges may happen, but we ensure it's not empty
-                        saveSuccess = true;
-                    } else {
-                        console.warn('Post-save verification: reloaded data looks empty or malformed -> retrying', reloaded);
-                        // sleep a bit before retrying
-                        await new Promise(r => setTimeout(r, 160));
-                    }
-                } else {
-                    // No verification path available; assume save succeeded if no exception thrown
-                    saveSuccess = true;
-                }
-            } catch (err) {
-                console.error('save attempt failed (will retry up to 3):', err);
-                // pause briefly before retrying
-                await new Promise(r => setTimeout(r, 180));
+            } else {
+                // Browser or web preview: use localStorage fallback and avoid IPC calls entirely
+                try { localStorage.setItem('sdc_lastLocalBackup', JSON.stringify(cleanData)); } catch (e) { console.error('localStorage save failed', e); }
             }
-        }
-
-        if (!saveSuccess) {
-            console.error('All save attempts failed. A local backup has been stored for recovery.');
-            try { localStorage.setItem('sdc_lastLocalBackup', JSON.stringify(cleanData)); } catch (e) {}
-            if (blocking) {
-                await showModal('Failed to save data to disk. A local recovery backup was created. Please check application logs. Logging out or closing is blocked to prevent data loss.', 'error');
-            }
-            return false;
-        }
+            
 
         // Post-save sanity: if inputs remain disabled after save, attempt recovery UI (existing behaviour)
         setTimeout(() => {
@@ -1898,6 +2304,36 @@ async function saveData() {
 }
 
 /**
+ * Mock data for browser/development environments
+ */
+function getMockData() {
+    return {
+        users: [
+            { id: 1, username: 'admin', password: 'admin123', fullName: 'Administrator', role: 'Admin', createdAt: new Date().toISOString() }
+        ],
+        prList: [
+            { id: 1, name: 'Dr. John Smith', specialty: 'General Practitioner', contact: '08012345678', commission: 5 },
+            { id: 2, name: 'Dr. Sarah Johnson', specialty: 'Cardiologist', contact: '08087654321', commission: 7 }
+        ],
+        inventory: [
+            { id: 1, name: 'Blood Test', category: 'Hematology', price: 5000, stock: 100 },
+            { id: 2, name: 'Malaria Test', category: 'Parasitology', price: 3000, stock: 150 },
+            { id: 3, name: 'Typhoid Test', category: 'Serology', price: 4000, stock: 120 }
+        ],
+        orders: [],
+        drafts: [],
+        auditLog: [],
+        companyProfile: {
+            name: 'Silhouette Diagnostic Center',
+            address: '123 Medical Plaza, Lagos',
+            email: 'info@silhouette.com',
+            contact: '08012345678',
+            logo: 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ccircle cx=%2250%22 cy=%2250%22 r=%2245%22 fill=%22%230e4a7c%22/%3E%3Ctext x=%2250%22 y=%2255%22 font-size=%2240%22 font-weight=%22bold%22 fill=%22white%22 text-anchor=%22middle%22%3ES%3C/text%3E%3C/svg%3E'
+        }
+    };
+}
+
+/**
  * Enhanced loadData() with recovery from backups:
  * - If loaded data is missing required structures (orders/inventory/users),
  *   attempt to recover from:
@@ -1906,84 +2342,110 @@ async function saveData() {
  * - Merge recovered data with current in-memory data (never replace)
  */
 async function loadData() {
-    if (window.electronAPI) {
-        const loadedData = await window.electronAPI.loadData();
+    // Safety check: only attempt Electron API if running in desktop (preload) mode
+    if (isDesktop) {
+        try {
+            const loadedData = await window.electronAPI.loadData();
 
-        // Quick validation helper
-        function isValidData(d) {
-            if (!d || typeof d !== 'object') return false;
-            // at least orders should be an array in production apps
-            if (!Array.isArray(d.orders) && !Array.isArray(d.inventory) && !Array.isArray(d.users)) return false;
-            return true;
-        }
-
-        let finalData = loadedData;
-
-        if (!isValidData(loadedData)) {
-            console.warn('Loaded data appears malformed or empty. Attempting recovery from backups.');
-
-            // 1) Try main-process restore if available (best-effort and non-interactive)
-            try {
-                if (window.electronAPI && typeof window.electronAPI.restoreFromLatestBackup === 'function') {
-                    const restored = await window.electronAPI.restoreFromLatestBackup();
-                    if (isValidData(restored)) {
-                        finalData = restored;
-                        console.info('Recovered application data from main-process latest backup.');
-                    }
-                }
-            } catch (err) {
-                console.warn('restoreFromLatestBackup failed', err);
+            // Quick validation helper
+            function isValidData(d) {
+                if (!d || typeof d !== 'object') return false;
+                // at least orders should be an array in production apps
+                if (!Array.isArray(d.orders) && !Array.isArray(d.inventory) && !Array.isArray(d.users)) return false;
+                return true;
             }
 
-            // 2) Fallback to localStorage backup if still invalid
-            if (!isValidData(finalData)) {
+            let finalData = loadedData;
+
+            if (!isValidData(loadedData)) {
+                console.warn('Loaded data appears malformed or empty. Attempting recovery from backups.');
+
+                // 1) Try main-process restore if available (best-effort and non-interactive)
                 try {
-                    const local = localStorage.getItem('sdc_lastLocalBackup');
-                    if (local) {
-                        const parsed = JSON.parse(local);
-                        if (isValidData(parsed)) {
-                            finalData = parsed;
-                            console.info('Recovered application data from localStorage fallback backup.');
-                            // Persist recovered data back to disk (attempt)
-                            try { await safeSaveData({ blocking: true, reason: 'recovery_on_startup' }); } catch (e) { console.warn('Immediate save after local recovery failed', e); }
+                    if (window.electronAPI && typeof window.electronAPI.restoreFromLatestBackup === 'function') {
+                        const restored = await window.electronAPI.restoreFromLatestBackup();
+                        if (isValidData(restored)) {
+                            finalData = restored;
+                            console.info('Recovered application data from main-process latest backup.');
                         }
                     }
                 } catch (err) {
-                    console.warn('Local fallback backup unavailable or corrupted', err);
+                    console.warn('restoreFromLatestBackup failed', err);
+                }
+
+                // 2) Fallback to localStorage backup if still invalid
+                if (!isValidData(finalData)) {
+                    try {
+                        const local = localStorage.getItem('sdc_lastLocalBackup');
+                        if (local) {
+                            const parsed = JSON.parse(local);
+                            if (isValidData(parsed)) {
+                                finalData = parsed;
+                                console.info('Recovered application data from localStorage fallback backup.');
+                                // Persist recovered data back to disk (attempt)
+                                try { await safeSaveData({ blocking: true, reason: 'recovery_on_startup' }); } catch (e) { console.warn('Immediate save after local recovery failed', e); }
+                            }
+                        }
+                    } catch (err) {
+                        console.warn('Local fallback backup unavailable or corrupted', err);
+                    }
+                }
+
+                // If still invalid and finalData is not usable, keep existing in-memory dataset (do not overwrite)
+                if (!isValidData(finalData)) {
+                    console.error('Unable to recover valid data from any backup. Retaining in-memory defaults (no destructive overwrite).');
                 }
             }
 
-            // If still invalid and finalData is not usable, keep existing in-memory dataset (do not overwrite)
-            if (!isValidData(finalData)) {
-                console.error('Unable to recover valid data from any backup. Retaining in-memory defaults (no destructive overwrite).');
+            if (finalData) {
+                users = finalData.users || users;
+                prList = finalData.prList || prList;
+                inventory = finalData.inventory || inventory;
+                // Normalize saved drafts so older saves or malformed entries don't break the billing flow
+                appState.drafts = (finalData.drafts || []).map(d => ensureBillingDataShape(d));
+
+                // Rehydrate orders
+                orders = (finalData.orders || []).map(order => ({
+                    ...order,
+                    date: new Date(order.date)
+                }));
+
+                // Rehydrate audit logs
+                auditLog = (finalData.auditLog || []).map(log => ({
+                    ...log,
+                    timestamp: new Date(log.timestamp)
+                }));
+
+                // Restore company settings
+                appState.companyProfile = finalData.companyProfile || appState.companyProfile;
+
+                // CRITICAL: mark initial load as complete so autosave won't overwrite with empty data
+                isInitialDataLoaded = true;
+                console.log('Data loaded and safety shield active.');
             }
+        } catch (err) {
+            console.error('Error loading data from Electron API:', err);
+            // Fall through to mock data
         }
+    } else {
+        console.log('Electron API not available - running in browser mode with mock data');
+    }
 
-        if (finalData) {
-            users = finalData.users || users;
-            prList = finalData.prList || prList;
-            inventory = finalData.inventory || inventory;
-            // Normalize saved drafts so older saves or malformed entries don't break the billing flow
-            appState.drafts = (finalData.drafts || []).map(d => ensureBillingDataShape(d));
-
-            // Rehydrate orders
-            orders = (finalData.orders || []).map(order => ({
-                ...order,
-                date: new Date(order.date)
-            }));
-
-            // Rehydrate audit logs
-            auditLog = (finalData.auditLog || []).map(log => ({
-                ...log,
-                timestamp: new Date(log.timestamp)
-            }));
-
-            // Restore company settings
-            appState.companyProfile = finalData.companyProfile || appState.companyProfile;
-
-            // CRITICAL: mark initial load as complete so autosave won't overwrite with empty data
+    // If no Electron API or loading failed, use mock data for browser/development
+    if (!isInitialDataLoaded && typeof window !== 'undefined') {
+        try {
+            const mockData = getMockData();
+            users = mockData.users;
+            prList = mockData.prList;
+            inventory = mockData.inventory;
+            orders = mockData.orders;
+            appState.drafts = mockData.drafts;
+            auditLog = mockData.auditLog;
+            appState.companyProfile = mockData.companyProfile;
             isInitialDataLoaded = true;
-            console.log('Data loaded and safety shield active.');
+            console.log('Mock data initialized for browser environment');
+        } catch (err) {
+            console.error('Error initializing mock data:', err);
         }
     }
 }
@@ -2231,40 +2693,6 @@ async function saveData() {
                 try { renderApp(); } catch(e) { console.error(e); }
             }
         }, 120);
-    }
-}
-
-async function loadData() {
-    if (window.electronAPI) {
-        const loadedData = await window.electronAPI.loadData();
-
-        if (loadedData) {
-
-            users = loadedData.users || [];
-            prList = loadedData.prList || prList;
-            inventory = loadedData.inventory || inventory;
-            // Normalize saved drafts so older saves or malformed entries don't break the billing flow
-            appState.drafts = (loadedData.drafts || []).map(d => ensureBillingDataShape(d));
-
-            // Rehydrate orders
-            orders = (loadedData.orders || []).map(order => ({
-                ...order,
-                date: new Date(order.date)
-            }));
-
-            // Rehydrate audit logs
-            auditLog = (loadedData.auditLog || []).map(log => ({
-                ...log,
-                timestamp: new Date(log.timestamp)
-            }));
-
-            // Restore company settings
-            appState.companyProfile = loadedData.companyProfile || appState.companyProfile;
-
-            // Mark that initial data finished loading to enable safe saves
-            isInitialDataLoaded = true;
-            console.log('Data loaded and safety shield active.');
-        }
     }
 }
 
@@ -2840,76 +3268,87 @@ async function loadData() {
                 const canAccessPRAndAnalytics = currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Staff');
 
                 return `
-                    <div class="sidebar ${sidebarCollapsed ? 'collapsed' : ''}">
+                    <aside class="sidebar ${sidebarCollapsed ? 'collapsed' : ''}">
                         <div class="sidebar-header">
-                            <div class="sidebar-logo">SDC</div>
-                            <button class="sidebar-toggle" onclick="toggleSidebar()">
-                                ${sidebarCollapsed ? '&#8594;' : '&#8592;'}
-                            </button>
+                            <div class="sidebar-logo">
+                                <div class="sidebar-logo-icon" onclick="toggleSidebar()" title="Toggle sidebar">${sidebarCollapsed ? '▸' : '◂'}</div>
+                                <span class="sidebar-logo-text">SILHOUETTE</span>
+                            </div>
                         </div>
                         
                         <nav class="sidebar-nav">
-                            <div class="nav-item ${currentView === 'dashboard' ? 'active' : ''}" onclick="navigateTo('dashboard')">
-                                <div class="nav-item-icon">&#128202;</div>
+                            <button class="nav-item ${currentView === 'dashboard' ? 'active' : ''}" onclick="navigateTo('dashboard')" style="justify-content: ${sidebarCollapsed ? 'center' : 'flex-start'};">
+                                <div class="nav-item-icon">📊</div>
                                 <div class="nav-item-label">Dashboard</div>
-                            </div>
+                                <div class="nav-item-tooltip">Dashboard</div>
+                            </button>
                             
-                            <div class="nav-item ${currentView === 'billing' ? 'active' : ''}" onclick="navigateTo('billing')">
-                                <div class="nav-item-icon">&#128203;</div>
+                            <button class="nav-item ${currentView === 'billing' ? 'active' : ''}" onclick="navigateTo('billing')" style="justify-content: ${sidebarCollapsed ? 'center' : 'flex-start'};">
+                                <div class="nav-item-icon">💳</div>
                                 <div class="nav-item-label">Billing</div>
-                            </div>
+                                <div class="nav-item-tooltip">Billing</div>
+                            </button>
 
-                            <div class="nav-item ${currentView === 'drafts' ? 'active' : ''}" onclick="navigateTo('drafts')">
-                                <div class="nav-item-icon">&#128190;</div>
-                                <div class="nav-item-label">Drafts ${appState.drafts && appState.drafts.length > 0 ? `<span style="background:var(--accent); color:white; padding:0.12rem 0.5rem; border-radius:999px; font-size:0.75rem; margin-left:0.5rem; font-weight:700;">${appState.drafts.length}</span>` : ''}</div>
-                            </div>
+                            <button class="nav-item ${currentView === 'drafts' ? 'active' : ''}" onclick="navigateTo('drafts')" style="justify-content: ${sidebarCollapsed ? 'center' : 'flex-start'};">
+                                <div class="nav-item-icon">📋</div>
+                                <div class="nav-item-label">Drafts ${appState.drafts && appState.drafts.length > 0 ? `<span style="background:var(--accent); color:white; padding:0.12rem 0.5rem; border-radius:999px; font-size:0.75rem; margin-left:auto; font-weight:700;">${appState.drafts.length}</span>` : ''}</div>
+                                <div class="nav-item-tooltip">Drafts</div>
+                            </button>
                             
-                            <div class="nav-item ${currentView === 'inventory' ? 'active' : ''}" onclick="navigateTo('inventory')">
+                            <button class="nav-item ${currentView === 'inventory' ? 'active' : ''}" onclick="navigateTo('inventory')" style="justify-content: ${sidebarCollapsed ? 'center' : 'flex-start'};">
                                 <div class="nav-item-icon">🧪</div>
                                 <div class="nav-item-label">Inventory</div>
-                            </div>
+                                <div class="nav-item-tooltip">Inventory</div>
+                            </button>
                             
                             ${canAccessPRAndAnalytics ? `
-                            <div class="nav-item ${currentView === 'pr-management' ? 'active' : ''}" onclick="navigateTo('pr-management')">
-                                <div class="nav-item-icon">&#128101;</div>
+                            <button class="nav-item ${currentView === 'pr-management' ? 'active' : ''}" onclick="navigateTo('pr-management')" style="justify-content: ${sidebarCollapsed ? 'center' : 'flex-start'};">
+                                <div class="nav-item-icon">👤</div>
                                 <div class="nav-item-label">PR Management</div>
-                            </div>
+                                <div class="nav-item-tooltip">PR Management</div>
+                            </button>
                             
-                            <div class="nav-item ${currentView === 'analytics' ? 'active' : ''}" onclick="navigateTo('analytics')">
-                                <div class="nav-item-icon">&#128200;</div>
+                            <button class="nav-item ${currentView === 'analytics' ? 'active' : ''}" onclick="navigateTo('analytics')" style="justify-content: ${sidebarCollapsed ? 'center' : 'flex-start'};">
+                                <div class="nav-item-icon">📈</div>
                                 <div class="nav-item-label">Analytics</div>
-                            </div>
+                                <div class="nav-item-tooltip">Analytics</div>
+                            </button>
                             ` : ''}
                             ${isAdmin ? `
-                            <div class="nav-item ${currentView === 'history' ? 'active' : ''}" onclick="navigateTo('history')">
-                                <div class="nav-item-icon">&#128220;</div>
+                            <button class="nav-item ${currentView === 'history' ? 'active' : ''}" onclick="navigateTo('history')" style="justify-content: ${sidebarCollapsed ? 'center' : 'flex-start'};">
+                                <div class="nav-item-icon">📜</div>
                                 <div class="nav-item-label">History</div>
-                            </div>
+                                <div class="nav-item-tooltip">History</div>
+                            </button>
 
-                            <div class="nav-item ${currentView === 'staff-management' ? 'active' : ''}" onclick="navigateTo('staff-management')">
-                                <div class="nav-item-icon">&#129489;&zwj;&#128188;</div>
+                            <button class="nav-item ${currentView === 'staff-management' ? 'active' : ''}" onclick="navigateTo('staff-management')" style="justify-content: ${sidebarCollapsed ? 'center' : 'flex-start'};">
+                                <div class="nav-item-icon">👨‍💼</div>
                                 <div class="nav-item-label">Staff Management</div>
-                            </div>
+                                <div class="nav-item-tooltip">Staff Management</div>
+                            </button>
                             ` : ''}
                             
-                            <div class="nav-item ${currentView === 'records' ? 'active' : ''}" onclick="navigateTo('records')">
+                            <button class="nav-item ${currentView === 'records' ? 'active' : ''}" onclick="navigateTo('records')" style="justify-content: ${sidebarCollapsed ? 'center' : 'flex-start'};">
                                 <div class="nav-item-icon">📁</div>
                                 <div class="nav-item-label">Records</div>
-                            </div>
+                                <div class="nav-item-tooltip">Records</div>
+                            </button>
                             
-                            <div class="nav-item ${currentView === 'settings' ? 'active' : ''}" onclick="navigateTo('settings')">
-                                <div class="nav-item-icon">&#9881;&#65039;</div>
+                            <button class="nav-item ${currentView === 'settings' ? 'active' : ''}" onclick="navigateTo('settings')" style="justify-content: ${sidebarCollapsed ? 'center' : 'flex-start'};">
+                                <div class="nav-item-icon">⚙️</div>
                                 <div class="nav-item-label">Settings</div>
-                            </div>
+                                <div class="nav-item-tooltip">Settings</div>
+                            </button>
                         </nav>
                         
                         <div class="sidebar-footer">
-                            <button class="nav-item" onclick="logout()" style="width: 100%; justify-content: center; background-color: rgba(239, 68, 68, 0.2); color: #fecaca;">
-                                <div class="nav-item-icon">&#128682;</div>
+                            <button class="nav-item" onclick="logout()" style="justify-content: ${sidebarCollapsed ? 'center' : 'flex-start'};" title="Logout">
+                                <div class="nav-item-icon">🚪</div>
                                 <div class="nav-item-label">Logout</div>
+                                <div class="nav-item-tooltip">Logout</div>
                             </button>
                         </div>
-                    </div>
+                    </aside>
                 `;
             },
             Header: ({ currentUser, companyProfile, sidebarCollapsed }) => {
@@ -3018,54 +3457,56 @@ async function loadData() {
                 },
                  
                 
-                Form: ({ companyProfile }) => `
-                    <div style="display:flex; align-items:center; justify-content:center; min-height:100vh;">
-                      <div class="relative w-full max-w-4xl h-[600px] bg-[var(--surface)] rounded-[32px] shadow-2xl overflow-hidden flex">
+                                Form: ({ companyProfile }) => {
+                                        if (typeof window.isSignUpView === 'undefined') window.isSignUpView = false;
+                                        const isSignUp = window.isSignUpView;
 
-                        <!-- Sliding colored panel -->
-                        <div id="sliding-panel" class="absolute top-0 left-0 h-full bg-[var(--primary)] z-30 transition-all duration-[800ms] ease-in-out flex flex-col items-center justify-center text-white w-[40%] rounded-r-[100px] shadow-[10px_0_30px_rgba(0,0,0,0.1)]">
-                            <div id="logo-content" class="text-center p-8 transition-all duration-700">
-                                <div style="margin-bottom: 1rem;"><img src="${companyProfile.logo}" alt="Company Logo" style="height: 60px; width: auto; margin: 0 auto; filter: drop-shadow(0 4px 14px rgba(0,0,0,0.12));"/></div>
-                                <h1 class="text-4xl font-black mt-4 uppercase">Silhouette</h1>
-                                <p class="mt-2 opacity-90">Diagnostic Center Management</p>
-                            </div>
+                                        // Flippable 3D card container
+                                        return `
+                                        <div style="display:flex; align-items:center; justify-content:center; min-height:100vh; padding:1rem; background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);">
+                                            <div class="flip-scene" style="perspective: 1400px; width:100%; max-width:520px;">
+                                                <div id="login-flip-inner" class="flip-card-inner" style="position:relative; width:100%; transform-style: preserve-3d; transition: transform 900ms cubic-bezier(.2,.9,.2,1);">
+                                                    <!-- Front Face -->
+                                                    <div class="flip-face flip-front card" style="background: var(--surface); border-radius: 28px; padding: 2.5rem; box-shadow: 0 20px 60px rgba(2,6,23,0.28); backface-visibility: hidden; position: relative;">
+                                                        <div style="text-align:center; margin-bottom:1rem;"><img src="${companyProfile.logo}" alt="logo" style="height:54px; width:auto; display:block; margin:0 auto 12px;"/></div>
+                                                        <h2 style="text-align:center; font-size:1.25rem; font-weight:800; margin-bottom:8px;">${companyProfile.name}</h2>
+                                                        <p style="text-align:center; color:var(--text-secondary); margin-bottom:1.25rem;">${isSignUp ? 'Create your account' : 'Sign in to continue'}</p>
 
-                            <div id="welcome-content" class="hidden text-center opacity-0 transition-opacity px-6">
-                                <h2 class="text-5xl font-bold">Welcome back,</h2>
-                                <h3 id="display-username" class="text-3xl font-medium mt-2 uppercase"></h3>
-                            </div>
-                        </div>
+                                                        ${isSignUp ? `
+                                                            <div class="form-group"><label class="form-label">Full Name</label><input type="text" id="signupFullName" class="form-input" placeholder="Full name"/></div>
+                                                        ` : ``}
 
-                        <!-- Form panel -->
-                        <div class="w-full flex">
-                          <div class="w-[40%] pointer-events-none"></div>
-                          <div class="w-[60%] p-12 flex flex-col justify-center">
-                            <div class="card" style="width: 100%; max-width: 480px; animation: popIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);">
-                              <div style="text-align: center; margin-bottom: 1rem;">
-                                <h2 style="font-size: 1.25rem; font-weight: 700; color: var(--text-primary);">${companyProfile.name}</h2>
-                                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">Sign in to continue</p>
-                              </div>
+                                                        <div class="form-group"><label class="form-label">Username</label><input type="text" id="loginUsername" class="form-input" placeholder="Username"/></div>
+                                                        <div class="form-group"><label class="form-label">Password</label>
+                                                            <div style="position:relative; display:flex; align-items:center;"><input type="password" id="loginPassword" class="form-input" placeholder="Password" style="padding-right:2.5rem;"/><button type="button" onclick="togglePasswordVisibility('loginPassword')" style="position:absolute; right:0.5rem; background:none; border:none;">&#128065;</button></div>
+                                                        </div>
 
-                              <div class="form-group">
-                                <label class="form-label">Username</label>
-                                <input type="text" id="loginUsername" class="form-input" placeholder="Enter your username" />
-                              </div>
-                              <div class="form-group">
-                                <label class="form-label">Password</label>
-                                <div style="position: relative; display: flex; align-items: center;">
-                                  <input type="password" id="loginPassword" class="form-input" placeholder="Enter password" style="padding-right: 2.5rem;" />
-                                  <button type="button" data-toggle-for="loginPassword" onclick="togglePasswordVisibility('loginPassword')" style="position: absolute; right: 0.5rem; background: none; border: none; cursor: pointer; font-size: 1.25rem; color: var(--text-secondary);">&#128065;</button>
-                                </div>
-                              </div>
+                                                        ${isSignUp ? `
+                                                            <div class="form-group"><label class="form-label">Confirm Password</label>
+                                                                <div style="position:relative; display:flex; align-items:center;"><input type="password" id="signupConfirmPassword" class="form-input" placeholder="Confirm password" style="padding-right:2.5rem;"/><button type="button" onclick="togglePasswordVisibility('signupConfirmPassword')" style="position:absolute; right:0.5rem; background:none; border:none;">&#128065;</button></div>
+                                                            </div>
+                                                        ` : ``}
 
-                              <button onclick="components.Login.handleLogin()" class="btn-primary" style="width: 100%; padding: 0.75rem; font-size: 1rem; margin-top: 1rem;">Sign In</button>
-                            </div>
-                          </div>
-                        </div>
+                                                        <button onclick="${isSignUp ? 'handleSignUp()' : 'components.Login.handleLogin()'}" class="btn-primary" style="width:100%; padding:0.75rem; margin-top:1rem; font-weight:800;">${isSignUp ? 'Create Account' : 'Sign In'}</button>
 
-                      </div>
-                    </div>
-                `
+                                                        <div style="text-align:center; margin-top:1rem;">
+                                                            ${isSignUp ? `<p class="login-toggle-text">Already have an account? <a href="#" onclick="toggleLoginSignUp(false);return false;">Sign In</a></p>` : `<p class="login-toggle-text">Don't have an account? <a href="#" onclick="toggleLoginSignUp(true);return false;">Sign Up</a></p>`}
+                                                        </div>
+                                                    </div>
+
+                                                    <!-- Back Face (Greeting) -->
+                                                    <div class="flip-face flip-back" style="background: linear-gradient(135deg,#0e4a7c,#1e3a8a); color: #fff; border-radius:28px; padding:2.5rem; box-shadow: 0 20px 60px rgba(2,6,23,0.38); transform: rotateY(180deg); backface-visibility: hidden; position: absolute; top:0; left:0; width:100%; height:100%; display:flex; align-items:center; justify-content:center; text-align:center;">
+                                                        <div>
+                                                            <div id="greeting-time" style="font-size:1rem; opacity:0.95; margin-bottom:6px;"></div>
+                                                            <div id="greeting-name" style="font-size:1.6rem; font-weight:800; letter-spacing:0.4px; margin-bottom:8px;"></div>
+                                                            <div id="greeting-msg" style="font-size:1rem; opacity:0.92;"></div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                `;
+                                }
             },
     // Placeholder for other components
 };
@@ -3116,39 +3557,98 @@ function updateHeaderDateTime() {
     }
 }
 
+/* Toggle between Login and Sign-Up views */
+function toggleLoginSignUp(isSignUp) {
+    window.isSignUpView = isSignUp;
+    // Clear form fields when switching views
+    const username = document.getElementById('loginUsername');
+    const password = document.getElementById('loginPassword');
+    if (username) username.value = '';
+    if (password) password.value = '';
+    const fullName = document.getElementById('signupFullName');
+    const confirmPassword = document.getElementById('signupConfirmPassword');
+    if (fullName) fullName.value = '';
+    if (confirmPassword) confirmPassword.value = '';
+    renderApp();
+}
+
+/* Handle Sign-Up form submission */
+function handleSignUp() {
+    const fullName = document.getElementById('signupFullName')?.value.trim();
+    const username = document.getElementById('loginUsername')?.value.trim();
+    const password = document.getElementById('loginPassword')?.value;
+    const confirmPassword = document.getElementById('signupConfirmPassword')?.value;
+
+    if (!fullName || !username || !password || !confirmPassword) {
+        showModal('Please fill in all sign-up fields.', 'warning');
+        return;
+    }
+
+    if (password !== confirmPassword) {
+        showModal('Passwords do not match.', 'error');
+        const confirmPwd = document.getElementById('signupConfirmPassword');
+        if (confirmPwd) confirmPwd.value = '';
+        return;
+    }
+
+    if (password.length < 6) {
+        showModal('Password must be at least 6 characters long.', 'warning');
+        return;
+    }
+
+    // Add user to in-memory store and auto-login
+    const newUser = { username: username.toLowerCase(), password: password, fullName: fullName, role: 'User' };
+    users.push(newUser);
+    appState.currentUser = { username: newUser.username, fullName: newUser.fullName, role: newUser.role };
+    logAction('SIGNUP', `User '${newUser.fullName}' created account.`);
+    // Flip card to welcome and then navigate
+    try { onLoginSuccess(appState.currentUser); } catch (e) { console.error('onLoginSuccess error after signup', e); appState.currentView = 'dashboard'; renderApp(); }
+}
+
 /* Sliding panel success animation handler */
 function onLoginSuccess(user) {
-    const panel = document.getElementById('sliding-panel');
-    const logo = document.getElementById('logo-content');
-    const welcome = document.getElementById('welcome-content');
-    const nameDisplay = document.getElementById('display-username');
+    // Flip the login card to show greeting, then navigate to dashboard
+    try {
+        const inner = document.getElementById('login-flip-inner');
+        const nameEl = document.getElementById('greeting-name');
+        const timeEl = document.getElementById('greeting-time');
+        const msgEl = document.getElementById('greeting-msg');
 
-    if (nameDisplay) nameDisplay.textContent = (user && (user.fullName || user.username)) || '';
+        const now = new Date();
+        const hour = now.getHours();
+        let greeting = 'Welcome';
+        if (hour < 12) greeting = 'Good morning';
+        else if (hour < 18) greeting = 'Good afternoon';
+        else greeting = 'Good evening';
 
-    // Expand panel to cover entire container
-    if (panel) {
-        panel.classList.add('panel-expanded');
-        // visually ensure it sits above other content
-        panel.style.zIndex = 60;
-    }
+        const displayName = (user && (user.fullName || user.username)) || 'Guest';
 
-    if (logo) {
-        logo.classList.add('fade-out');
-    }
+        if (timeEl) timeEl.textContent = `${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+        if (nameEl) nameEl.textContent = `${greeting}, ${displayName}`;
 
-    setTimeout(() => {
-        if (welcome) {
-            welcome.classList.remove('hidden');
-            setTimeout(() => welcome.classList.add('fade-in'), 50);
+        // Professional, smooth, sweet messages
+        if (msgEl) {
+            if (hour < 12) msgEl.textContent = "We're glad you're here — let's make today productive.";
+            else if (hour < 18) msgEl.textContent = "Hope your day is going well — welcome back to Silhouette.";
+            else msgEl.textContent = "Good to see you this evening — let's wrap things up smoothly.";
         }
-    }, 400);
 
-    // After animation completes, transition to dashboard
-    setTimeout(() => {
-        appState.currentView = 'dashboard';
-        renderApp();
-        try { checkDailyTimeVerification(); } catch (e) { console.error(e); }
-    }, 2400);
+        if (inner) {
+            // trigger flip
+            inner.classList.add('flipped');
+        }
+
+        // After short delay, navigate to dashboard
+        setTimeout(() => {
+            appState.currentView = 'dashboard';
+            window.isSignUpView = false;
+            renderApp();
+            try { checkDailyTimeVerification(); } catch (e) { console.error(e); }
+        }, 1800);
+    } catch (err) {
+        console.error('onLoginSuccess error', err);
+        appState.currentView = 'dashboard'; renderApp();
+    }
 }
 
         function renderDashboard() {
@@ -3660,8 +4160,7 @@ function onLoginSuccess(user) {
   <div id="inventorySuggestions" class="autocomplete-box"></div>
 </div>
 
-
-
+                    <div class="card-table-wrapper">
                         <table class="table">
                             <thead>
                                 <tr>
@@ -3782,6 +4281,7 @@ function onLoginSuccess(user) {
                             </div>
                         ` : ''}
 
+                        <div class="card-table-wrapper">
                         <table class="table">
                             <thead>
                                 <tr>
@@ -3828,7 +4328,7 @@ function onLoginSuccess(user) {
                                 })()}
                             </tbody>
                         </table>
-                    </div>
+                        </div>
 
                     <div style="margin-top: 1.5rem;">
                         <button onclick="navigateTo('dashboard')" class="btn-secondary">Back to Dashboard</button>
@@ -3965,7 +4465,7 @@ function onLoginSuccess(user) {
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
                             <h3 style="font-weight: 700; font-size: 1.25rem; margin: 0;">Top PR Agents by Referrals (Today)</h3>
                         </div>
-                        <div class="responsive-table-wrapper">
+                        <div class="card-table-wrapper">
                             <table class="table">
                                 <thead>
                                     <tr><th>PR Agent Name</th><th>Number of Referrals</th><th>Total Revenue</th></tr>
@@ -4000,7 +4500,7 @@ function onLoginSuccess(user) {
                                         <button class="btn-secondary" onclick="changeDailyRecordDate(1)" ${new Date(appState.dailyRecordViewDate).setHours(0,0,0,0) >= new Date().setHours(0,0,0,0) ? 'disabled' : ''}>Next Day &#8594;</button>
                                     </div>
                                 </div>
-                                <div class="responsive-table-wrapper">
+                                <div class="card-table-wrapper">
                                     <table class="table">
                                         <thead><tr><th>PR Agent Name</th><th>Number of Referrals</th><th>Total Revenue</th></tr></thead>
                                         <tbody>
@@ -4034,7 +4534,7 @@ function onLoginSuccess(user) {
                                 <button class="btn-primary" onclick="printCommissionReport()">&#128424;&#65039; Print Commissions</button>
                             </div>
                         </div>
-                        <div class="responsive-table-wrapper">
+                        <div class="card-table-wrapper">
                             <table class="table">
                                 <thead><tr><th>Agent</th><th>Referrals</th><th>Total Revenue</th><th>Commission (10%)</th></tr></thead>
                                 <tbody>
@@ -4067,7 +4567,7 @@ function onLoginSuccess(user) {
                                         <button class="btn-primary" onclick="printDailyCommissionReport()">&#128424;&#65039; Print Daily</button>
                                     </div>
                                 </div>
-                                <div class="responsive-table-wrapper">
+                                <div class="card-table-wrapper">
                                     <table class="table">
                                         <thead><tr><th>Agent</th><th>Referrals</th><th>Total Revenue</th><th>Commission (10%)</th></tr></thead>
                                         <tbody>
@@ -4110,11 +4610,10 @@ function onLoginSuccess(user) {
                             <button class="btn-secondary" onclick="printHospitalMonthlyReport()">Print</button>
                         </div>
 
-                        <div class="responsive-table-wrapper" style="margin-top:1rem;">
-                            <div style="max-height:420px; overflow-y:auto; padding-right:8px;">
-                                <table class="table">
-                                    <thead><tr><th style="width:40px;"></th><th>Hospital</th><th style="text-align:right;">Total Revenue</th></tr></thead>
-                                    <tbody>
+                        <div class="card-table-wrapper" style="margin-top:1rem;">
+                            <table class="table">
+                                <thead><tr><th style="width:40px;"></th><th>Hospital</th><th style="text-align:right;">Total Revenue</th></tr></thead>
+                                <tbody>
                                         ${(() => {
                                             const data = getHospitalMonthlyPerformance(appState.hospitalPerformanceMonth || new Date());
                                             if (data.length === 0) return `<tr><td colspan="3" style="text-align:center;color:var(--text-secondary);padding:1rem;">No hospital referrals for this period.</td></tr>`;
@@ -4138,7 +4637,7 @@ function onLoginSuccess(user) {
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
                             <h3 style="font-weight: 700; font-size: 1.25rem; margin: 0;">Top 5 Most Ordered Tests (Today)</h3>
                         </div>
-                        <div class="responsive-table-wrapper">
+                        <div class="card-table-wrapper">
                             <table class="table">
                                 <thead>
                                     <tr><th>Test Name</th><th>Times Ordered</th></tr>
@@ -4236,8 +4735,20 @@ function onLoginSuccess(user) {
             setTimeout(() => {
                 try {
                     updateBillingCalculations();
+                    attachEventListeners();
+                    
+                    // Trigger the referredBy input to re-render suggestions if value exists
+                    const referredByInput = document.getElementById('referredBySearch');
+                    if (referredByInput) {
+                        // Fire input event to trigger renderPRSuggestions via event listener
+                        const inputEvent = new Event('input', { bubbles: true, cancelable: true });
+                        referredByInput.dispatchEvent(inputEvent);
+                        console.log('Dispatched input event on referredBySearch for draft load');
+                    }
+                    
                     const patientNameInput = document.getElementById('patientName');
                     if (patientNameInput) patientNameInput.focus();
+                    
                     // recovery after loading draft
                     const disabledEls = document.querySelectorAll('input:disabled, button:disabled, textarea:disabled, select:disabled');
                     if (disabledEls.length > 0) {
@@ -4249,7 +4760,7 @@ function onLoginSuccess(user) {
                 } catch (e) {
                     console.warn('Error while finalizing draft load:', e);
                 }
-            }, 60);
+            }, 100);
         }
 
         function deleteDraft(index) {
@@ -4591,11 +5102,34 @@ function onLoginSuccess(user) {
                                             <option value="cash" ${order.paymentMethod === 'cash' ? 'selected' : ''}>Cash</option>
                                             <option value="pos" ${order.paymentMethod === 'pos' ? 'selected' : ''}>POS</option>
                                             <option value="transfer" ${order.paymentMethod === 'transfer' ? 'selected' : ''}>Transfer</option>
+                                            <option value="split" ${order.paymentMethod === 'split' ? 'selected' : ''}>Split Payment</option>
                                         </select>
                                     </div>
                                 </div>
-                                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;"><span>Amount Paid:</span> <span>${formatCurrency(order.amountPaid)}</span></div>
-                                <div style="display: flex; justify-content: space-between; color: ${order.balance > 0 ? 'var(--error)' : 'var(--success)'};"><span>Balance:</span> <strong>${formatCurrency(order.balance)}</strong></div>
+                                ${order.paymentMethod === 'split' ? `
+                                    <div style="margin-top: 1rem; padding: 1rem; background-color: var(--surface); border-radius: 0.5rem; border: 1px solid var(--border);">
+                                        <label style="font-weight: 500; display: block; margin-bottom: 0.75rem;">Split Payment Breakdown</label>
+                                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem; margin-bottom: 0.5rem;">
+                                            <div>
+                                                <label style="font-size: 0.85rem; color: var(--text-secondary);">Cash</label>
+                                                <input type="number" class="form-input" data-order-split-method="cash" value="${(order.splitPayments?.cash || 0)}" oninput="updateOrderSplitPayment(${order.id}, 'cash', this.value)" onblur="commitOrderSplitPayment()" style="font-size: 0.85rem;">
+                                            </div>
+                                            <div>
+                                                <label style="font-size: 0.85rem; color: var(--text-secondary);">POS</label>
+                                                <input type="number" class="form-input" data-order-split-method="pos" value="${(order.splitPayments?.pos || 0)}" oninput="updateOrderSplitPayment(${order.id}, 'pos', this.value)" onblur="commitOrderSplitPayment()" style="font-size: 0.85rem;">
+                                            </div>
+                                            <div>
+                                                <label style="font-size: 0.85rem; color: var(--text-secondary);">Transfer</label>
+                                                <input type="number" class="form-input" data-order-split-method="transfer" value="${(order.splitPayments?.transfer || 0)}" oninput="updateOrderSplitPayment(${order.id}, 'transfer', this.value)" onblur="commitOrderSplitPayment()" style="font-size: 0.85rem;">
+                                            </div>
+                                        </div>
+                                        <div style="font-size: 0.85rem; color: var(--text-secondary); text-align: right;">
+                                            Total Split: <strong data-split-total="${order.id}">${formatCurrency((order.splitPayments?.cash || 0) + (order.splitPayments?.pos || 0) + (order.splitPayments?.transfer || 0))}</strong>
+                                        </div>
+                                    </div>
+                                ` : ''}
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; margin-top: 0.75rem;"><span>Amount Paid:</span> <span data-amount-paid="${order.id}">${formatCurrency(order.amountPaid)}</span></div>
+                                <div style="display: flex; justify-content: space-between; color: ${order.balance > 0 ? 'var(--error)' : 'var(--success)'};"><span>Balance:</span> <strong data-balance="${order.id}">${formatCurrency(order.balance)}</strong></div>
                             </div>
                         </div>
 
@@ -5155,8 +5689,87 @@ function onLoginSuccess(user) {
             try { attachEventListeners(); } catch(e) {}
         }
 
+        // Global Table Row Selection and Drag-to-Scroll Handler
+        function attachTableRowInteractions() {
+            const tableWrappers = document.querySelectorAll('.card-table-wrapper, .responsive-table-wrapper, .scrollable-daily-log');
+            
+            tableWrappers.forEach(wrapper => {
+                const table = wrapper.querySelector('table');
+                if (!table) return;
+                
+                let selectedRow = null;
+                let isScrolling = false;
+                let startX = 0;
+                let startScrollLeft = 0;
+                let movedDistance = 0;
+                
+                // Handle row interaction for selection and drag-to-scroll
+                const rows = table.querySelectorAll('tbody tr');
+                rows.forEach(row => {
+                    row.addEventListener('mousedown', (e) => {
+                        // Don't select if clicking on a button or link
+                        if (e.target.closest('button, a, select')) return;
+                        
+                        isScrolling = true;
+                        startX = e.clientX;
+                        startScrollLeft = wrapper.scrollLeft;
+                        movedDistance = 0;
+                        
+                        // Deselect previous row if any
+                        if (selectedRow && selectedRow !== row) {
+                            selectedRow.classList.remove('row-selected');
+                        }
+                        
+                        // Select this row
+                        row.classList.add('row-selected');
+                        selectedRow = row;
+                        
+                        e.preventDefault();
+                    });
+
+                    row.addEventListener('click', (e) => {
+                        // Don't prevent default if clicking on interactive elements
+                        if (e.target.closest('button, a, select, input')) return;
+                        
+                        // Just for visual feedback when not dragging
+                        if (movedDistance < 5) {
+                            if (selectedRow !== row) {
+                                if (selectedRow) selectedRow.classList.remove('row-selected');
+                                row.classList.add('row-selected');
+                                selectedRow = row;
+                            }
+                        }
+                    });
+                });
+                
+                // Handle mouse move for drag-to-scroll (only on selected row)
+                wrapper.addEventListener('mousemove', (e) => {
+                    if (!isScrolling || !selectedRow) return;
+                    
+                    const moveX = e.clientX - startX;
+                    movedDistance = Math.abs(moveX);
+                    const scrollAmount = -moveX; // Negative because drag right = scroll left
+                    
+                    wrapper.scrollLeft = startScrollLeft + scrollAmount;
+                });
+
+                // Handle mouse up to stop scrolling
+                document.addEventListener('mouseup', () => {
+                    isScrolling = false;
+                });
+                
+                // Clear scrolling on leave
+                wrapper.addEventListener('mouseleave', () => {
+                    isScrolling = false;
+                });
+            });
+        }
+
         function attachEventListeners() {
             try {
+                // Attach table row interactions first
+                attachTableRowInteractions();
+                
                 // Service selection checkboxes
                 document.querySelectorAll('.service-checkbox').forEach(checkbox => {
                     checkbox.addEventListener('change', function() {
@@ -5265,17 +5878,8 @@ function onLoginSuccess(user) {
                     });
                 }
 
-                // PR suggestions click handler (delegated)
-                const prSuggestionsDiv = document.getElementById('prSuggestions');
-                if (prSuggestionsDiv) {
-                    prSuggestionsDiv.addEventListener('click', function(e) {
-                        const item = e.target.closest('.pr-suggestion-item');
-                        if (!item) return;
-                        const name = item.dataset.name;
-                        const phone = item.dataset.phone;
-                        selectPRAgent(name, phone);
-                    });
-                }
+                // PR suggestions click handler is now attached dynamically in renderPRSuggestions()
+                // No need for delegated handler anymore since we attach to each item on render
 
                 // Login/setup inputs: force lowercase on input and pasted text for username/password
                 // This improves UX by showing the conversion live and prevents case mismatches during auth
@@ -5755,37 +6359,61 @@ function onLoginSuccess(user) {
         }
 
         // --- Helper functions for PR agent search/add ---
+        let prSuggestTimeout = null;
         function renderPRSuggestions(query) {
-            const suggestionsDiv = document.getElementById('prSuggestions');
-            const addBtn = document.getElementById('addPRAgentContainer');
-            if (!suggestionsDiv) return;
+            clearTimeout(prSuggestTimeout);
+            prSuggestTimeout = setTimeout(() => {
+                const suggestionsDiv = document.getElementById('prSuggestions');
+                const addBtn = document.getElementById('addPRAgentContainer');
+                if (!suggestionsDiv || !addBtn) {
+                    console.warn('PR suggestions elements not found');
+                    return;
+                }
 
-            const lowerQuery = (query || '').toLowerCase().trim();
-            const matches = prList.filter(pr => pr.name.toLowerCase().includes(lowerQuery));
+                const lowerQuery = (query || '').toLowerCase().trim();
+                const matches = prList.filter(pr => pr.name.toLowerCase().includes(lowerQuery));
 
-            if (lowerQuery && matches.length === 0) {
-                // No matches and user typed something: show "add new" option
-                suggestionsDiv.innerHTML = `
-                    <div style="padding:0.5rem; color:var(--text-secondary); font-size:0.9rem;">
-                        No results for "${query}"
-                    </div>
-                `;
-                addBtn.style.display = 'block';
-                suggestionsDiv.style.display = 'block';
-            } else if (matches.length > 0) {
-                // Show matched suggestions
-                suggestionsDiv.innerHTML = matches.map(pr => `
-                    <div class="pr-suggestion-item" data-name="${pr.name}" data-phone="${pr.phone}" style="padding:0.5rem; border-bottom:1px solid var(--border); cursor:pointer;">
-                        <div style="font-weight:500;">${pr.name}</div>
-                        <div style="font-size:0.8rem; color:var(--text-secondary);">${pr.phone}</div>
-                    </div>
-                `).join('');
-                addBtn.style.display = 'none';
-                suggestionsDiv.style.display = 'block';
-            } else {
-                suggestionsDiv.style.display = 'none';
-                addBtn.style.display = 'none';
-            }
+                if (lowerQuery && matches.length === 0) {
+                    // No matches and user typed something: show "add new" option
+                    suggestionsDiv.innerHTML = `
+                        <div style="padding:0.5rem; color:var(--text-secondary); font-size:0.9rem;">
+                            No results for "${query}"
+                        </div>
+                    `;
+                    addBtn.style.display = 'block';
+                    suggestionsDiv.style.display = 'block';
+                } else if (matches.length > 0) {
+                    // Show matched suggestions
+                    suggestionsDiv.innerHTML = matches.map(pr => `
+                        <div class="pr-suggestion-item" data-name="${escapeHtml(pr.name)}" data-phone="${escapeHtml(pr.phone || '')}" style="padding:0.5rem; border-bottom:1px solid var(--border); cursor:pointer; background:var(--background); transition:background 0.15s;">
+                            <div style="font-weight:500;">${escapeHtml(pr.name)}</div>
+                            <div style="font-size:0.8rem; color:var(--text-secondary);">${escapeHtml(pr.phone || 'N/A')}</div>
+                        </div>
+                    `).join('');
+                    addBtn.style.display = 'none';
+                    suggestionsDiv.style.display = 'block';
+                    
+                    // Reattach click handlers after rendering
+                    setTimeout(() => {
+                        suggestionsDiv.querySelectorAll('.pr-suggestion-item').forEach(item => {
+                            item.addEventListener('mouseover', function() {
+                                this.style.background = 'rgba(0,0,0,0.05)';
+                            });
+                            item.addEventListener('mouseout', function() {
+                                this.style.background = 'var(--background)';
+                            });
+                            item.addEventListener('click', function() {
+                                const name = this.dataset.name;
+                                const phone = this.dataset.phone;
+                                selectPRAgent(name, phone);
+                            });
+                        });
+                    }, 0);
+                } else {
+                    suggestionsDiv.style.display = 'none';
+                    addBtn.style.display = 'none';
+                }
+            }, 50);
         }
 
         function selectPRAgent(name, phone) {
@@ -6614,38 +7242,45 @@ function onLoginSuccess(user) {
                 <head>
                     <title>Official Receipt - ${order.pid}</title>
                     <style>
-                        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
+                        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Mono:wght@400;700&display=swap');
 
                         /* Base reset */
                         html, body { margin: 0; padding: 0; height: auto; }
-                        body { font-family: 'Roboto', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; color: #1e293b; background-color: transparent; }
+                        body { font-family: 'Roboto Mono', 'Roboto', monospace; color: #111827; background-color: transparent; font-size: 11pt; }
 
-                        /* Desktop/preview layout - use mm widths to match thermal paper
-                           Default to 80mm roll width. Change in @page below for printing. */
-                        .receipt-container { width: 80mm; max-width: 80mm; margin: 0 auto; padding: 4mm; background-color: #ffffff; border: 0.2mm solid #ddd; box-sizing: border-box; overflow: hidden; }
-                        .receipt-header { text-align: center; border-bottom: 0.35mm solid #334155; padding-bottom: 3mm; margin-bottom: 4mm; }
-                        .receipt-header .logo { margin-bottom: 2mm; }
-                        .receipt-header .logo img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
-                        .receipt-header h2 { margin: 0; font-size: 4.8mm; font-weight: 700; color: #0e4a7c; }
-                        .receipt-header .address { font-size: 2.8mm; color: #475569; margin-top: 2mm; line-height: 1.3; }
-                        .receipt-header .receipt-title { margin: 2mm 0 0 0; font-size: 3.2mm; color: #475569; font-weight: 700; }
+                        /* Receipt: fixed printable width (72mm) to ensure safe margins on 80mm rolls */
+                        .receipt-container { width: 72mm; max-width: 72mm; margin: 0 auto; padding: 4mm; background-color: #ffffff; box-sizing: border-box; overflow: hidden; }
 
-                        .details { margin-bottom: 4mm; }
-                        .details div { display: flex; justify-content: space-between; margin-bottom: 1.5mm; font-size: 3.4mm; }
-                        .details div span:first-child { color: #475569; }
+                        /* Header */
+                        .receipt-header { text-align: center; margin-bottom: 4mm; }
+                        .receipt-header .logo img { max-height: 18mm; display: block; margin: 0 auto 2mm; }
+                        .receipt-header h2 { margin: 0; font-size: 13pt; font-weight: 700; }
+                        .receipt-header .address { font-size: 9pt; color: #475569; line-height: 1.2; margin-top: 3px; }
+                        .double-dash { text-align: center; font-family: 'Roboto Mono', monospace; margin: 6px 0; color: #64748b; }
 
-                        .services { border-top: 0.2mm solid #cbd5e1; border-bottom: 0.2mm solid #cbd5e1; padding: 2.5mm 0; margin: 4mm 0; }
-                        .services .service-item { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2mm; font-size: 3.4mm; }
-                        .services .service-item .service-name { font-weight: 500; }
-                        .services .service-item .service-category { font-size: 2.8mm; color: #64748b; }
-                        .services .service-item .service-price { font-weight: 700; }
+                        /* Metadata grid: 2-column label:value pairs */
+                        .meta-table { width: 100%; border-collapse: collapse; margin-bottom: 4mm; font-size: 10.5pt; }
+                        .meta-table td { padding: 2px 0; vertical-align: top; word-break: break-word; }
+                        .meta-table td.label { color: #475569; font-weight: 600; width: 35%; }
+                        .meta-table td.value { width: 65%; text-align: left; }
 
-                        .total div { display: flex; justify-content: space-between; margin-bottom: 1.5mm; font-size: 3.4mm; }
-                        .total .grand-total { font-weight: 700; font-size: 4.5mm; border-top: 0.3mm solid #1e293b; padding-top: 2mm; margin-top: 2mm; }
-                        .total .balance-due { color: #ef4444; font-weight: 700; font-size: 3.8mm; }
+                        /* Itemized table with fixed columns and forced wrapping */
+                        .items { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 10.5pt; margin-bottom: 4mm; }
+                        .items col.name { width: 60%; }
+                        .items col.price { width: 40%; }
+                        .items td { padding: 3px 0; vertical-align: top; word-break: break-word; overflow-wrap: break-word; white-space: normal; }
+                        .items td.price { text-align: right; }
+                        .items .category { font-size: 9pt; color: #64748b; margin-top: 3px; }
 
-                        .footer { text-align: center; margin-top: 4mm; font-size: 2.8mm; color: #64748b; }
-                        .footer p { margin: 1mm 0; }
+                        .separator { border-top: 1px dashed #999; margin: 4mm 0; }
+
+                        .totals { width: 100%; font-size: 11pt; margin-bottom: 4mm; }
+                        .totals .row { display: flex; justify-content: flex-end; gap: 8px; }
+                        .totals .row strong { min-width: 40mm; text-align: right; }
+
+                        .footer { text-align: center; font-size: 10pt; color: #475569; margin-top: 6mm; }
+                        .signature { margin-top: 8mm; text-align: left; font-size: 10pt; }
+                        .signature .sig-line { border-top: 1px solid #111827; width: 40%; margin-top: 12px; }
 
                         /* PRINT RULES - ensure printer gets exact sizes and no extra margins/pages */
                         @page { size: 80mm auto; margin: 0; }
@@ -6653,64 +7288,72 @@ function onLoginSuccess(user) {
                         @media print {
                             html, body { height: auto !important; margin: 0 !important; padding: 0 !important; }
                             body { background: transparent !important; -webkit-print-color-adjust: exact; }
-                            .receipt-container { width: 80mm !important; max-width: 80mm !important; padding: 4mm !important; border: none !important; box-sizing: border-box !important; overflow: hidden !important; }
-                            /* Prevent page-breaks inside items to avoid content splitting unexpectedly */
-                            .receipt-header, .details, .services, .total, .footer { page-break-inside: avoid; }
+                            .receipt-container { width: 72mm !important; max-width: 72mm !important; padding: 4mm !important; box-sizing: border-box !important; overflow: hidden !important; }
+                            /* Prevent page-breaks inside grouped blocks */
+                            .receipt-header, .meta-table, .items, .totals, .footer, .signature { page-break-inside: avoid; }
                         }
                     </style>
                 </head>
                 <body>
-                    <div class="receipt-container">
+                    <div class="receipt-container" role="document" aria-label="Clinic receipt">
                         <div class="receipt-header">
-                            <div class="logo"><img src="${appState.companyProfile.logo}" alt="Company Logo" style="height: 80px; width: auto; margin: 0 auto;"/></div>
+                            <div class="logo"><img src="${appState.companyProfile.logo}" alt="Company Logo"/></div>
                             <h2>${appState.companyProfile.name}</h2>
-                            <div class="address">
-                                <p>${appState.companyProfile.address}</p>
-                                <p style="font-size:1.05rem; font-weight:600;">${appState.companyProfile.contact}</p>
-                            </div>
-                            <p class="receipt-title">Official Receipt</p>
+                            <div class="address">${appState.companyProfile.address} <br/> ${appState.companyProfile.contact}</div>
+                            <div class="double-dash">===============</div>
                         </div>
-                        <div class="details">
-                            <div><span>Patient Name:</span> <strong>${order.patientName}</strong></div>
-                            <div><span>Patient ID:</span> <strong>${order.pid}</strong></div>
-                            <div><span>Date & Time:</span> <span>${new Date(order.date).toLocaleDateString()} ${order.time}</span></div>
-                        </div>
-                        <div class="services">
-                            ${serviceDetails.map(s => `
-                                <div class="service-item">
-                                    <div>
-                                        <div class="service-name">${s.name}</div>
-                                        ${s.category ? `<div class="service-category">${s.category}</div>` : ''}
-                                    </div>
-                                    <div class="service-price">${formatCurrency(s.price)}</div>
-                                </div>
-                            `).join('')}
-                        </div>
-                        <div class="total">
-                            <div><span>Subtotal:</span> <span>${formatCurrency(subtotal)}</span></div>
-                            <div><span>Discount Given:</span> <span>-${formatCurrency(subtotal - order.total)}</span></div>
+
+                        <table class="meta-table" role="presentation">
+                            <tr><td class="label">Patient Name:</td><td class="value">${order.patientName}</td></tr>
+                            <tr><td class="label">Patient ID:</td><td class="value">${order.pid}</td></tr>
+                            <tr><td class="label">Date:</td><td class="value">${new Date(order.date).toLocaleString()}</td></tr>
+                        </table>
+
+                        <table class="items" role="table">
+                            <colgroup><col class="name"/><col class="price"/></colgroup>
+                            <tbody>
+                                ${serviceDetails.map(s => `
+                                    <tr>
+                                        <td>
+                                            <div style="font-weight:600;">${s.name}</div>
+                                            ${s.category ? `<div class="category">${s.category}</div>` : ''}
+                                        </td>
+                                        <td class="price">${formatCurrency(s.price)}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+
+                        <div class="separator" aria-hidden="true"></div>
+
+                        <div class="totals" role="contentinfo">
+                            <div class="row"><div>Subtotal:</div><strong>${formatCurrency(subtotal)}</strong></div>
+                            <div class="row"><div>Discount:</div><strong>-${formatCurrency(subtotal - order.total)}</strong></div>
                             ${order.paymentMethod === 'split' && order.splitPayments ? `
-                                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed #999;">
-                                    <div><span>Payment Method:</span> <span>Split Payment</span></div>
-                                    <div style="padding-left: 15px; font-size: 0.9rem; color: #475569; margin-top: 5px;">
-                                        ${order.splitPayments.cash > 0 ? `<div><span>Cash:</span> <span>${formatCurrency(order.splitPayments.cash)}</span></div>` : ''}
-                                        ${order.splitPayments.pos > 0 ? `<div><span>POS:</span> <span>${formatCurrency(order.splitPayments.pos)}</span></div>` : ''}
-                                        ${order.splitPayments.transfer > 0 ? `<div><span>Transfer:</span> <span>${formatCurrency(order.splitPayments.transfer)}</span></div>` : ''}
-                                    </div>
-                                </div>
+                                <div style="font-size:9pt;color:#475569;margin-top:4px;">Payment Method: Split Payment</div>
+                                <div style="font-size:9pt;color:#475569;margin-top:4px;">${order.splitPayments.cash > 0 ? `Cash: ${formatCurrency(order.splitPayments.cash)}` : ''} ${order.splitPayments.pos > 0 ? ` POS: ${formatCurrency(order.splitPayments.pos)}` : ''} ${order.splitPayments.transfer > 0 ? ` Transfer: ${formatCurrency(order.splitPayments.transfer)}` : ''}</div>
                             ` : `
-                                <div><span>Payment Method:</span> <span>${order.paymentMethod.charAt(0).toUpperCase() + order.paymentMethod.slice(1)}</span></div>
+                                <div style="font-size:9pt;color:#475569;margin-top:4px;">Payment Method: ${order.paymentMethod.charAt(0).toUpperCase() + order.paymentMethod.slice(1)}</div>
                             `}
-                            <div class="grand-total"><span>TOTAL:</span> <span>${formatCurrency(order.total)}</span></div>
+
                             ${order.paymentStatus === 'installment' ? `
-                                <div><span>Amount Paid:</span> <span>${formatCurrency(order.amountPaid)}</span></div>
-                                <div class="balance-due"><span>BALANCE DUE:</span> <span>${formatCurrency(order.balance)}</span></div>
+                                <div class="row"><div>Amount Paid:</div><strong>${formatCurrency(order.amountPaid || 0)}</strong></div>
+                                <div class="row"><div>Balance Due:</div><strong style="color:#ef4444;">${formatCurrency(typeof order.balance !== 'undefined' ? order.balance : (order.total - (order.amountPaid || 0)))}</strong></div>
+                                <div style="font-size:9pt;color:#ef4444;margin-top:4px;">Payment Status: INSTALLMENT</div>
                             ` : `
-                                <div class="grand-total"><span>Amount Paid:</span> <span>${formatCurrency(order.total)}</span></div>
+                                <div style="font-size:9pt;color:#16a34a;margin-top:4px;">Payment Status: PAID IN FULL</div>
                             `}
+
+                            <div class="row" style="margin-top:6px;font-size:12pt;"><div><strong>Total:</strong></div><strong>${formatCurrency(order.total)}</strong></div>
+                        </div>
+
                         <div class="footer">
-                            <p><strong>Payment Status: ${order.paymentStatus === 'full' ? 'PAID IN FULL' : 'INSTALLMENT'}</strong></p>
-                            <p>Thank you for choosing Silhouette Diagnostics.</p>
+                            <p>Thank you for choosing ${appState.companyProfile.name}.</p>
+                        </div>
+
+                        <div class="signature" aria-hidden="true">
+                            <div class="sig-line"></div>
+                            <div style="margin-top:4px;">Authorized Signature</div>
                         </div>
                     </div>
                 </body></html>`;
@@ -6720,7 +7363,7 @@ function onLoginSuccess(user) {
             const receiptHTML = buildReceiptHTML(order);
 
             // Prefer native Electron printing if available (silent printing, margins control)
-            if (window.electronAPI && typeof window.electronAPI.printReceipt === 'function') {
+            if (isDesktop && window.electronAPI && typeof window.electronAPI.printReceipt === 'function') {
                 try {
                     await window.electronAPI.printReceipt(receiptHTML, { silent: true, widthMm: 80 });
                     // Small toast to inform user
@@ -7433,6 +8076,10 @@ function onLoginSuccess(user) {
                 if (!order) return;
                 const old = order.paymentMethod;
                 order.paymentMethod = newMethod;
+                // Initialize splitPayments if switching to split and it doesn't exist
+                if (newMethod === 'split' && !order.splitPayments) {
+                    order.splitPayments = { cash: 0, pos: 0, transfer: 0 };
+                }
                 autoSave();
                 logAction('UPDATE_PAYMENT_METHOD', `Changed payment method for order #${order.id} (${order.pid}) from '${old}' to '${newMethod}'.`);
                 renderApp();
@@ -7440,6 +8087,75 @@ function onLoginSuccess(user) {
                 console.error('updateOrderPaymentMethod failed:', err);
                 showToast('Failed to update payment method', 'error', 1200);
             }
+        }
+
+        // Update split payment amounts for an order
+        let orderSplitPaymentTimeout = null;
+        function updateOrderSplitPayment(orderId, method, value) {
+            try {
+                const order = orders.find(o => o.id === orderId);
+                if (!order) return;
+                
+                // Initialize splitPayments if it doesn't exist
+                if (!order.splitPayments) {
+                    order.splitPayments = { cash: 0, pos: 0, transfer: 0 };
+                }
+                
+                const amount = parseFloat(value) || 0;
+                order.splitPayments[method] = amount;
+                
+                // Update amountPaid to be the sum of all split payments
+                order.amountPaid = Object.values(order.splitPayments).reduce((sum, val) => sum + val, 0);
+                
+                // Recalculate balance
+                order.balance = Math.max(0, order.total - order.amountPaid);
+                
+                // Update UI directly without full re-render for smooth typing
+                const totalSplitEl = document.querySelector(`[data-split-total="${orderId}"]`);
+                if (totalSplitEl) {
+                    totalSplitEl.textContent = formatCurrency(order.amountPaid);
+                }
+                
+                const amountPaidEl = document.querySelector(`[data-amount-paid="${orderId}"]`);
+                if (amountPaidEl) {
+                    amountPaidEl.textContent = formatCurrency(order.amountPaid);
+                }
+                
+                const balanceEl = document.querySelector(`[data-balance="${orderId}"]`);
+                if (balanceEl) {
+                    balanceEl.textContent = formatCurrency(order.balance);
+                    balanceEl.style.color = order.balance > 0 ? 'var(--error)' : 'var(--success)';
+                }
+                
+                // Save silently and debounce render like in billing page
+                autoSave();
+                logAction('UPDATE_SPLIT_PAYMENT', `Updated split payment for order #${order.id} (${order.pid}): ${method} = ${formatCurrency(amount)}`);
+                
+                // Debounced render to avoid bubbling while typing
+                clearTimeout(orderSplitPaymentTimeout);
+                // If the user is actively focused on one of the split inputs, avoid scheduling a render
+                const active = document.activeElement;
+                const focusedIsOrderSplit = active && active.getAttribute && active.getAttribute('data-order-split-method');
+                if (!focusedIsOrderSplit) {
+                    orderSplitPaymentTimeout = setTimeout(() => {
+                        renderApp();
+                        orderSplitPaymentTimeout = null;
+                    }, 180); // 180ms debounce for typing
+                } else {
+                    // keep orderSplitPaymentTimeout null while typing — render will occur on blur
+                    orderSplitPaymentTimeout = null;
+                }
+            } catch (err) {
+                console.error('updateOrderSplitPayment failed:', err);
+                showToast('Failed to update split payment', 'error', 1200);
+            }
+        }
+
+        function commitOrderSplitPayment() {
+            // User left the input — commit any pending changes immediately
+            clearTimeout(orderSplitPaymentTimeout);
+            orderSplitPaymentTimeout = null;
+            renderApp();
         }
 
         function changePRPerformancePage(direction) {
@@ -7620,6 +8336,22 @@ function onLoginSuccess(user) {
                 const start = appState.analyticsDateRange.start;
                 const end = appState.analyticsDateRange.end;
                 const datasetOrders = getOrdersBetween(start, end);
+
+                // Check if data is empty - show loading state
+                if (!datasetOrders || datasetOrders.length === 0) {
+                    const canvas = document.getElementById('singleAnalysisChart');
+                    if (canvas && canvas.getContext) {
+                        const ctx = canvas.getContext('2d');
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        ctx.fillStyle = '#f3f4f6';
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        ctx.fillStyle = '#6b7280';
+                        ctx.font = '16px sans-serif';
+                        ctx.textAlign = 'center';
+                        ctx.fillText('Loading data...', canvas.width / 2, canvas.height / 2);
+                    }
+                    return;
+                }
 
                 let labels = [];
                 let data = [];
@@ -8334,12 +9066,68 @@ function onLoginSuccess(user) {
                 if (appState.currentView === 'inventory') {
                     attachInventorySearchAutocomplete();
                 }
+
+                // Re-attach immersive header handlers so they survive re-renders
+                try { attachImmersiveHandlers(); } catch(e) { console.error('attachImmersiveHandlers error', e); }
             } catch (error) {
                 console.error('renderApp error:', error);
                 setTimeout(() => {
                     showModal('An error occurred. Please refresh the app.', 'error').catch(e => console.error(e));
                 }, 100);
             }
+        }
+
+        // Ensure immersive header continues to work after DOM re-renders
+        function attachImmersiveHandlers(){
+            const sensor = document.getElementById('immersive-sensor');
+            const header = document.getElementById('immersive-header');
+            if (!sensor || !header) return;
+
+            // Remove existing listeners by cloning nodes (safer than tracking multiple functions)
+            const newSensor = sensor.cloneNode(true);
+            sensor.parentNode.replaceChild(newSensor, sensor);
+            const newHeader = header.cloneNode(true);
+            header.parentNode.replaceChild(newHeader, header);
+
+            let hideTimer = null;
+            let isHeaderHovered = false;
+
+            function showHeader(){
+                newHeader.classList.add('visible');
+                newHeader.setAttribute('aria-hidden','false');
+                if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+            }
+
+            function scheduleHide(delay = 800){
+                if (hideTimer) clearTimeout(hideTimer);
+                if (!isHeaderHovered) {
+                    hideTimer = setTimeout(()=>{
+                        if (!isHeaderHovered) {
+                            newHeader.classList.remove('visible');
+                            newHeader.setAttribute('aria-hidden','true');
+                        }
+                    }, delay);
+                }
+            }
+
+            newSensor.addEventListener('mouseenter', showHeader);
+            newSensor.addEventListener('mouseleave', ()=> scheduleHide(600));
+            newHeader.addEventListener('mouseenter', ()=> { isHeaderHovered = true; showHeader(); });
+            newHeader.addEventListener('mouseleave', ()=> { isHeaderHovered = false; scheduleHide(500); });
+
+            document.addEventListener('mousemove', (e)=>{ if (e.clientY <= 24) showHeader(); });
+
+            // Wire controls (re-bind since nodes were cloned)
+            const minBtn = newHeader.querySelector('#minimize-btn');
+            const maxBtn = newHeader.querySelector('#maximize-btn');
+            const closeBtn = newHeader.querySelector('#close-btn');
+            if (minBtn) minBtn.addEventListener('click', ()=> { try { window.electronAPI && window.electronAPI.minimizeApp && window.electronAPI.minimizeApp(); } catch(e){} });
+            if (maxBtn) maxBtn.addEventListener('click', ()=> { try { window.electronAPI && window.electronAPI.maximizeApp && window.electronAPI.maximizeApp(); } catch(e){} });
+            if (closeBtn) closeBtn.addEventListener('click', ()=> { try { window.electronAPI && window.electronAPI.closeApp && window.electronAPI.closeApp(); } catch(e){} });
+
+            // Double-click drag region toggles maximize
+            const dragRegion = newHeader.querySelector('.drag-region');
+            if (dragRegion) dragRegion.addEventListener('dblclick', ()=> { try { window.electronAPI && window.electronAPI.maximizeApp && window.electronAPI.maximizeApp(); } catch(e){} });
         }
 
         // Safe modal system to replace alert/confirm - non-blocking
@@ -8629,4 +9417,4 @@ function onLoginSuccess(user) {
         </div>
     </div>
 </body>
-</html>
+</html></html>

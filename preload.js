@@ -11,4 +11,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   confirmShutdown: () => ipcRenderer.send('confirm-shutdown'),
   backupData: () => ipcRenderer.invoke("backup-data"),
   restoreData: () => ipcRenderer.invoke("restore-data"),
+  // Window controls for frameless immersive header
+  minimizeApp: () => ipcRenderer.send('window-minimize'),
+  maximizeApp: () => ipcRenderer.send('window-maximize'),
+  closeApp: () => ipcRenderer.send('window-close'),
 });

@@ -8,8 +8,10 @@ let isActuallyQuitting = false;
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
-    width: 1400,
-    height: 900,
+    width: 1280,
+    height: 1024,
+    frame: false, // frameless for immersive UI
+    autoHideMenuBar: true,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -147,4 +149,27 @@ ipcMain.handle("restore-data", async (event) => {
   }
 
   return { success: false };
+});
+
+// ----------------------------
+// WINDOW CONTROL IPC HANDLERS
+// ----------------------------
+ipcMain.on('window-minimize', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win) win.minimize();
+});
+
+ipcMain.on('window-maximize', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win) return;
+  if (win.isMaximized && win.isMaximized()) {
+    win.unmaximize();
+  } else {
+    win.maximize();
+  }
+});
+
+ipcMain.on('window-close', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win) win.close();
 });
